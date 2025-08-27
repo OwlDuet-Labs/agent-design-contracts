@@ -1,0 +1,142 @@
+---
+contract_id: "adc_cli-adc-001"
+title: "Agent Design Contracts (ADC) CLI Tool"
+author: "Thomas A Drake"
+status: "active"
+version: 1.0
+created_date: "2024-07-25"
+last_updated: "2024-07-25"
+---
+
+### [Rationale: CLI Rationale] <adc-cli-rationale-01>
+The Agent Design Contracts (ADC) methodology relies on specialized AI agents to perform tasks like code generation, auditing, and design refinement. A command-line tool is necessary to provide a simple, unified interface for developers to invoke these agents, manage configurations, and integrate the ADC workflow into their projects. This tool acts as the primary orchestrator of the ADC lifecycle, translating user commands into specific AI agent invocations. This contract & tool serves as an example for agents to follow when using provideed ADC roles.
+
+### [Implementation: High-Level Architecture] <adc-cli-impl-01>
+The `adc` tool is a Python application built using the standard `argparse` library for command-line parsing. It dynamically loads available AI provider modules (e.g., for Gemini, OpenAI, Anthropic) and manages their API keys via environment variables. The tool's configuration, including default agents and models, is stored in a JSON file located at `~/.adcconfig.json`. It uses a system of custom prompts, which can be overridden by the user, to guide the behavior of the specialized AI agents for each task.
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/`
+- **Configuration Scope:** `~/.adcconfig.json`
+- **Tests:**
+  - `tests/test_cli.py`
+
+### [Tool: ADC CLI Tool] <adc-cli-agent-01>
+The `adc` command-line tool provides a unified interface for managing Agent Design Contracts and orchestrating AI agent workflows. It serves as the primary entry point for developers to interact with the ADC methodology, offering commands for code generation, auditing, and contract refinement.
+
+**Interface:**
+
+- **Command Structure:** `adc <command> [options]`
+- **Configuration:** Manages settings via `~/.adcconfig.json`
+- **AI Provider Integration:** Supports multiple AI providers (OpenAI, Anthropic, Gemini) with dynamic loading
+- **Context Management:** Loads and processes ADC contract files (`.qmd`), source code, and role-based prompts
+
+**Core Operations:**
+
+1. **Command Parsing:** Interprets user commands and validates arguments
+2. **Configuration Loading:** Reads user preferences and AI provider settings
+3. **Context Assembly:** Aggregates contracts, code, and prompts into structured input
+4. **AI Provider Orchestration:** Initializes and manages AI client connections
+5. **Response Processing:** Handles AI responses and performs file operations as needed
+6. **Output Formatting:** Presents results to users in appropriate formats
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/__main__.py::main()`
+
+### [DataModel: AIProvider] <adc-cli-datamodel-01>
+An interface for an AI provider, ensuring each conforms to a standard contract. Uses functional design principles with no Optional types.
+
+- `name: str` - The unique name of the provider (e.g., "gemini", defaults to "unknown")
+- `description: str` - A human-readable description (defaults to "No description provided")
+- `api_key: str` - The API key for this provider (defaults to empty string, validated at runtime)
+- `is_initialized: bool` - Connection status (defaults to False)
+- `initialize() -> ProviderResult` - Returns success/failure with error details, no exceptions
+- `generate(system_prompt: str, user_content: str, model: str) -> GenerationResult` - Returns result object with content and metadata
+
+**Functional Design Note:** No Optional types used - all fields have sensible defaults. Status and errors communicated through result objects rather than exceptions or None values.
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/__main__.py` (Implemented as `GeminiAgent`, `OpenAIAgent`, `AnthropicAgent` classes)
+
+### [DataModel: ADCConfig] <adc-cli-datamodel-02>
+Defines the structure of the `~/.adcconfig.json` file. Demonstrates functional composition for configuration management.
+
+- `default_agent: str` - The name of the default AI provider to use (defaults to "gemini")
+- `task_agents: dict` - A dictionary mapping tasks to specific AI providers (defaults populated for all tasks)
+- `models: dict` - A dictionary mapping AI providers to models (defaults provided for all supported providers)
+
+**Functional Design Note:** Configuration object is always complete with defaults. Use `@classmethod` factory methods like `from_file()` and `with_defaults()` for construction rather than Optional fields.
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli_cli/__main__.py::load_config()`
+
+### [Feature: Generate Code] <adc-cli-feature-01>
+The `generate` command, which uses the "Code Generator" agent to create source code from contracts.
+
+- **Command:** `adc generate --contracts <path>`
+- **Behavior:** Loads `.qmd` files, uses the `code_generator.md` prompt, and calls the appropriate AI agent. Parses the Markdown response to create a file tree and source code files.
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/__main__.py` (argparse subcommand `generate`)
+- **Tests:** `tests/test_cli.py::test_generate_command`
+
+### [Feature: Audit Code] <adc-cli-feature-02>
+The `audit` command, which uses the "Auditor" agent to check code for compliance with contracts and occasionally report context-engineering insights.
+
+- **Command:** `adc audit --contracts <path> --code <path>`
+- **Behavior:** Loads `.qmd` contract files and the source code, uses the `auditor.md` prompt, and calls the AI agent to produce a drift and architectural analysis report.
+- **Meta-Policy Optimization:** When systemic patterns are detected (e.g., repeated Optional usage, defensive programming), the audit suggests specific policy updates to prevent these anti-patterns in future code generation.
+
+**Example Meta-Policy Output:**
+```markdown
+## 4. Meta-Policy Optimization Opportunities
+**CONTEXT:** Found 12 instances of defensive `.get(key, default)` patterns across 5 files
+**POLICY TARGET:** code_generator.md  
+**PROPOSED ADDITION:** "Avoid using Optional in DataModels and adopt functional style"
+**RECURSIVE IMPACT:** Future code generation will eliminate defensive programming patterns
+```
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/__main__.py` (argparse subcommand `audit`)
+- **Tests:** `tests/test_cli.py::test_audit_command`
+
+### [Feature: Refine Contracts] <adc-cli-feature-03>
+The `refine` command, which uses the "Refiner" agent to improve the design contracts.
+
+- **Command:** `adc refine --contracts <path>`
+- **Behavior:** Loads `.qmd` contract files, uses the `refiner.md` prompt, and calls the AI agent to get suggestions for improving the contracts.
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/__main__.py` (argparse subcommand `refine`)
+- **Tests:** `tests/test_cli.py::test_refine_command`
+
+### [Feature: Manage Configuration] <adc-cli-feature-04>
+The `config` command, which allows users to view and manage the `~/.adcconfig.json` file.
+
+- **Commands:**
+  - `adc config --list`
+  - `adc config --set-default <agent>`
+  - `adc config --set-generate <agent>`
+- **Behavior:** Reads from and writes to the JSON configuration file.
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/__main__.py` (argparse subcommand `config`)
+- **Tests:** `tests/test_cli.py::test_config_command`
+
+### [Feature: VSCode Integration] <adc-cli-feature-05>
+The `setup-vscode` command, which creates a `.vscode/tasks.json` file for easy integration.
+
+- **Command:** `adc setup-vscode --target-dir <path>`
+- **Behavior:** Creates a `tasks.json` file with pre-configured tasks for `generate`, `audit`, and `refine`.
+
+**Parity:**
+
+- **Implementation Scope:** `src/adc_cli/__main__.py` (argparse subcommand `setup-vscode`)
+- **Tests:** `tests/test_cli.py::test_setup_vscode_command` 
