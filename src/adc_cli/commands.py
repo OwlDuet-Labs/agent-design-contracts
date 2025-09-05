@@ -426,82 +426,92 @@ def validate_command(
 ):
     """Validate ADC contract implementations."""
     from .validation.contract_validator import ContractValidator
-    
+
     logger.info("Starting contract validation")
-    
+
     validator = ContractValidator()
-    
+
     if contract_id:
         # Validate specific contract
         result = validator.validate_specific_contract(contract_id)
         output_data = {
-            "status": "success" if result.implementation_status == "implemented" else "partial",
+            "status": "success"
+            if result.implementation_status == "implemented"
+            else "partial",
             "timestamp": result.validation_timestamp,
             "contract_id": result.contract_id,
             "implementation_status": result.implementation_status,
             "compliance_score": result.compliance_score,
             "issues": result.issues_found,
-            "recommendations": result.recommendations
+            "recommendations": result.recommendations,
         }
     else:
         # Validate all contracts
         output_data = validator.validate_all_contracts()
-    
+
     if json_output:
         print(json.dumps(output_data, indent=2))
     else:
         print("\n" + "=" * 50)
         print("CONTRACT VALIDATION RESULTS")
         print("=" * 50)
-        
+
         if contract_id:
             print(f"Contract: {contract_id}")
             print(f"Status: {output_data['implementation_status']}")
             print(f"Compliance Score: {output_data['compliance_score']:.2f}")
-            if output_data['issues']:
+            if output_data["issues"]:
                 print("\nIssues Found:")
-                for issue in output_data['issues']:
+                for issue in output_data["issues"]:
                     print(f"  - {issue.get('description', 'Unknown issue')}")
         else:
-            summary = output_data['validation_summary']
+            summary = output_data["validation_summary"]
             print(f"Total Contracts: {summary['total_contracts']}")
             print(f"Implemented: {summary['implemented']}")
             print(f"Partial: {summary['partial']}")
             print(f"Missing: {summary['missing']}")
             print(f"Overall Compliance: {summary['compliance_score']:.2f}")
-        
+
         print("=" * 50)
-    
+
     return True
 
 
 # ADC-IMPLEMENTS: <health-checker-tool-01>
-def health_command(detailed: bool = False, json_output: bool = False, verbose: bool = False):
+def health_command(
+    detailed: bool = False, json_output: bool = False, verbose: bool = False
+):
     """Check system health and component status."""
     import asyncio
+
     from .validation.health_checker import HealthChecker
-    
+
     logger.info("Starting system health check")
-    
+
     async def run_health_check():
         checker = HealthChecker()
         return await checker.check_system_health()
-    
+
     # Run the async health check
     health_report = asyncio.run(run_health_check())
-    
+
     output_data = {
         "status": health_report.overall_status,
         "timestamp": health_report.timestamp,
         "health_score": health_report.health_score,
         "overall_status": health_report.overall_status,
-        "components": health_report.components if detailed else {
-            name: {"status": comp.get("status", "unknown"), "score": comp.get("score", 0.0)}
+        "components": health_report.components
+        if detailed
+        else {
+            name: {
+                "status": comp.get("status", "unknown"),
+                "score": comp.get("score", 0.0),
+            }
             for name, comp in health_report.components.items()
         },
-        "recommendations": health_report.recommendations
+        "recommendations": health_report.recommendations,
     }
-    
+
     if json_output:
         print(json.dumps(output_data, indent=2))
     else:
@@ -510,20 +520,20 @@ def health_command(detailed: bool = False, json_output: bool = False, verbose: b
         print("=" * 50)
         print(f"Overall Status: {health_report.overall_status.upper()}")
         print(f"Health Score: {health_report.health_score:.2f}")
-        
+
         print("\nComponent Status:")
         for name, component in health_report.components.items():
             status = component.get("status", "unknown")
             score = component.get("score", 0.0)
             print(f"  {name}: {status.upper()} (score: {score:.2f})")
-        
+
         if health_report.recommendations:
             print("\nRecommendations:")
             for rec in health_report.recommendations:
                 print(f"  - {rec}")
-        
+
         print("=" * 50)
-    
+
     return True
 
 
@@ -532,37 +542,33 @@ def lint_command(
     dry_run: bool = False,
     no_backup: bool = False,
     json_output: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
 ):
     """Lint and fix formatting issues in ADC contract files."""
     from .contract_lint import ContractLinter
-    
+
     logger.info(f"Running contract linting on: {path}")
-    
+
     # Configure linter
-    config = {
-        'dry_run': dry_run,
-        'backup_originals': not no_backup,
-        'verbose': verbose
-    }
-    
+    config = {"dry_run": dry_run, "backup_originals": not no_backup, "verbose": verbose}
+
     linter = ContractLinter(config)
-    
+
     # Check if path is a file or directory
     if os.path.isfile(path):
         # Lint single file
         results = linter.lint_contract_file(path)
         results = {
-            'total_files': 1,
-            'files_processed': 1,
-            'files_updated': 1 if results['file_updated'] else 0,
-            'total_fixes': len(results['fixes_applied']),
-            'file_results': [results]
+            "total_files": 1,
+            "files_processed": 1,
+            "files_updated": 1 if results["file_updated"] else 0,
+            "total_fixes": len(results["fixes_applied"]),
+            "file_results": [results],
         }
     else:
         # Lint directory
         results = linter.run_contract_lint(path)
-    
+
     # Output results
     if json_output:
         print(json.dumps(results, indent=2))
@@ -572,38 +578,44 @@ def lint_command(
         print(f"Files processed: {results['files_processed']}")
         print(f"Files updated: {results['files_updated']}")
         print(f"Total fixes applied: {results['total_fixes']}")
-        
+
         if dry_run:
             print("\n[DRY RUN] No files were actually modified")
-        
-        if results['file_results']:
+
+        if results["file_results"]:
             print(f"\nDetailed Results:")
             print(f"-" * 50)
-            
-            for file_result in results['file_results']:
-                if file_result['fixes_applied'] or file_result['warnings'] or file_result['errors']:
+
+            for file_result in results["file_results"]:
+                if (
+                    file_result["fixes_applied"]
+                    or file_result["warnings"]
+                    or file_result["errors"]
+                ):
                     print(f"\n{file_result['file']}:")
-                    
-                    if file_result['fixes_applied']:
-                        print(f"  Fixes applied: {', '.join(file_result['fixes_applied'])}")
-                    
-                    if file_result['warnings']:
+
+                    if file_result["fixes_applied"]:
+                        print(
+                            f"  Fixes applied: {', '.join(file_result['fixes_applied'])}"
+                        )
+
+                    if file_result["warnings"]:
                         print(f"  Warnings:")
-                        for warning in file_result['warnings']:
+                        for warning in file_result["warnings"]:
                             print(f"    - {warning}")
-                    
-                    if file_result['errors']:
+
+                    if file_result["errors"]:
                         print(f"  Errors:")
-                        for error in file_result['errors']:
+                        for error in file_result["errors"]:
                             print(f"    - {error}")
-                    
-                    if 'backup_created' in file_result:
+
+                    if "backup_created" in file_result:
                         print(f"  Backup: {file_result['backup_created']}")
-        
+
         print("\nLinting complete!")
-    
+
     # Return success if no errors
     return all(
-        not file_result.get('errors', [])
-        for file_result in results.get('file_results', [])
+        not file_result.get("errors", [])
+        for file_result in results.get("file_results", [])
     )

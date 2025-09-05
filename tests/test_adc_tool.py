@@ -54,7 +54,7 @@ def test_config():
     config = ADCConfig(
         default_agent="openai",
         task_agents={"test": "gemini"},
-        models={"openai": "gpt-4"}
+        models={"openai": "gpt-4"},
     )
     assert config.default_agent == "openai"
     assert config.task_agents == {"test": "gemini"}
@@ -176,12 +176,12 @@ def test_vs_code_setup():
             # Check settings content
             with open(settings_file) as f:
                 settings = json.load(f)
-                assert "files.associations" in settings, (
-                    "settings should contain file associations"
-                )
-                assert settings["files.associations"]["*.qmd"] == "markdown", (
-                    "qmd files should be associated with markdown"
-                )
+                assert (
+                    "files.associations" in settings
+                ), "settings should contain file associations"
+                assert (
+                    settings["files.associations"]["*.qmd"] == "markdown"
+                ), "qmd files should be associated with markdown"
 
             # Check tasks content
             with open(tasks_file) as f:
@@ -191,9 +191,9 @@ def test_vs_code_setup():
 
                 task_labels = [task["label"] for task in tasks["tasks"]]
                 assert "ADC: Generate Code" in task_labels, "should have generate task"
-                assert "ADC: Audit Implementation" in task_labels, (
-                    "should have audit task"
-                )
+                assert (
+                    "ADC: Audit Implementation" in task_labels
+                ), "should have audit task"
 
         finally:
             os.chdir(original_cwd)

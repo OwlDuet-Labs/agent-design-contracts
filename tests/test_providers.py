@@ -4,6 +4,7 @@ import os
 from unittest.mock import Mock, patch
 
 import pytest
+
 from adc_cli.providers import (
     ANTHROPIC_AVAILABLE,
     GEMINI_AVAILABLE,
@@ -299,12 +300,15 @@ class TestProviderFunctions:
     def test_call_ai_agent_success(self):
         """Test successful AI agent call."""
         # Mock agent
-        from adc_cli.providers import ProviderResult, GenerationResult
+        from adc_cli.providers import GenerationResult, ProviderResult
+
         mock_agent = Mock()
         mock_agent.name = "test_agent"
         mock_agent.is_initialized = True
         mock_agent.initialize.return_value = ProviderResult.success_result()
-        mock_agent.generate.return_value = GenerationResult.success_result("Generated response")
+        mock_agent.generate.return_value = GenerationResult.success_result(
+            "Generated response"
+        )
 
         with patch("adc_cli.providers.get_available_providers") as mock_get_providers:
             mock_get_providers.return_value = {"test_agent": mock_agent}
@@ -313,17 +317,22 @@ class TestProviderFunctions:
 
             assert result == "Generated response"
             mock_agent.initialize.assert_not_called()  # Since is_initialized=True
-            mock_agent.generate.assert_called_once_with("System prompt", "User content", "")
+            mock_agent.generate.assert_called_once_with(
+                "System prompt", "User content", ""
+            )
 
     def test_call_ai_agent_with_model(self):
         """Test AI agent call with specific model."""
         # Mock agent
-        from adc_cli.providers import ProviderResult, GenerationResult
+        from adc_cli.providers import GenerationResult, ProviderResult
+
         mock_agent = Mock()
         mock_agent.name = "test_agent"
         mock_agent.is_initialized = True
         mock_agent.initialize.return_value = ProviderResult.success_result()
-        mock_agent.generate.return_value = GenerationResult.success_result("Generated response")
+        mock_agent.generate.return_value = GenerationResult.success_result(
+            "Generated response"
+        )
 
         with patch("adc_cli.providers.get_available_providers") as mock_get_providers:
             mock_get_providers.return_value = {"test_agent": mock_agent}
@@ -344,18 +353,19 @@ class TestProviderFunctions:
 
             result = call_ai_agent("nonexistent_agent", "System prompt", "User content")
 
-            assert result.startswith(
-                "Error: Agent 'nonexistent_agent' not available"
-            )
+            assert result.startswith("Error: Agent 'nonexistent_agent' not available")
 
     def test_call_ai_agent_initialization_error(self):
         """Test AI agent call with initialization error."""
         # Mock agent that fails to initialize
         from adc_cli.providers import ProviderResult
+
         mock_agent = Mock()
         mock_agent.name = "test_agent"
         mock_agent.is_initialized = False
-        mock_agent.initialize.return_value = ProviderResult.error_result("Initialization failed")
+        mock_agent.initialize.return_value = ProviderResult.error_result(
+            "Initialization failed"
+        )
 
         with patch("adc_cli.providers.get_available_providers") as mock_get_providers:
             mock_get_providers.return_value = {"test_agent": mock_agent}
@@ -368,12 +378,15 @@ class TestProviderFunctions:
     def test_call_ai_agent_generation_error(self):
         """Test AI agent call with generation error."""
         # Mock agent that fails to generate content
-        from adc_cli.providers import ProviderResult, GenerationResult
+        from adc_cli.providers import GenerationResult, ProviderResult
+
         mock_agent = Mock()
         mock_agent.name = "test_agent"
         mock_agent.is_initialized = True
         mock_agent.initialize.return_value = ProviderResult.success_result()
-        mock_agent.generate.return_value = GenerationResult.error_result("Generation failed")
+        mock_agent.generate.return_value = GenerationResult.error_result(
+            "Generation failed"
+        )
 
         with patch("adc_cli.providers.get_available_providers") as mock_get_providers:
             mock_get_providers.return_value = {"test_agent": mock_agent}

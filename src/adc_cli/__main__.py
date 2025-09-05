@@ -103,9 +103,7 @@ Examples:
     validate_parser = subparsers.add_parser(
         "validate", help="Validate ADC contract implementations"
     )
-    validate_parser.add_argument(
-        "--contract", help="Specific contract ID to validate"
-    )
+    validate_parser.add_argument("--contract", help="Specific contract ID to validate")
     validate_parser.add_argument(
         "--all", action="store_true", help="Validate all contracts"
     )
@@ -132,22 +130,18 @@ Examples:
         "path",
         nargs="?",
         default=".",
-        help="Path to directory or file to lint (default: current directory)"
+        help="Path to directory or file to lint (default: current directory)",
     )
     lint_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show what would be fixed without applying changes"
+        help="Show what would be fixed without applying changes",
     )
     lint_parser.add_argument(
-        "--no-backup",
-        action="store_true",
-        help="Do not create backup files"
+        "--no-backup", action="store_true", help="Do not create backup files"
     )
     lint_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output results as JSON"
+        "--json", action="store_true", help="Output results as JSON"
     )
 
     # Parse arguments
@@ -196,13 +190,11 @@ Examples:
                 contract_id=args.contract or "",
                 all_contracts=args.all,
                 json_output=args.json,
-                verbose=args.verbose
+                verbose=args.verbose,
             )
         elif args.command == "health":
             success = health_command(
-                detailed=args.detailed,
-                json_output=args.json,
-                verbose=args.verbose
+                detailed=args.detailed, json_output=args.json, verbose=args.verbose
             )
         elif args.command == "lint":
             success = lint_command(
@@ -210,7 +202,7 @@ Examples:
                 dry_run=args.dry_run,
                 no_backup=args.no_backup,
                 json_output=args.json,
-                verbose=args.verbose
+                verbose=args.verbose,
             )
         else:
             logger.error(f"Unknown command: {args.command}")

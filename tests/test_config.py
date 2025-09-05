@@ -31,7 +31,7 @@ class TestADCConfig:
         config = ADCConfig(
             default_agent="openai",
             task_agents={"test": "gemini"},
-            models={"openai": "gpt-4"}
+            models={"openai": "gpt-4"},
         )
         assert config.default_agent == "openai"
         assert config.task_agents == {"test": "gemini"}
@@ -49,7 +49,7 @@ class TestADCConfig:
         config = ADCConfig(
             default_agent="anthropic",
             task_agents={"generate": "openai"},
-            models={"anthropic": "claude-3"}
+            models={"anthropic": "claude-3"},
         )
 
         assert config.default_agent == "anthropic"
@@ -61,7 +61,7 @@ class TestADCConfig:
         config = ADCConfig(
             default_agent="test_agent",
             task_agents={"task1": "agent1"},
-            models={"provider1": "model1"}
+            models={"provider1": "model1"},
         )
 
         result = config.to_dict()
@@ -83,7 +83,7 @@ class TestLoadConfig:
         mock_config = ADCConfig(
             default_agent="anthropic",
             task_agents={"generate": "anthropic"},
-            models={"anthropic": "claude-3"}
+            models={"anthropic": "claude-3"},
         )
         mock_from_file.return_value = mock_config
 
@@ -101,7 +101,7 @@ class TestLoadConfig:
         mock_config = ADCConfig(
             default_agent="openai",
             task_agents={"generate": "gemini"},
-            models={"openai": "gpt-4"}
+            models={"openai": "gpt-4"},
         )
         mock_from_file.return_value = mock_config
 
@@ -163,7 +163,7 @@ class TestSaveConfig:
         with tempfile.TemporaryDirectory() as tmpdir:
             test_config_path = Path(tmpdir) / ".adcconfig.json"
             save_config(config, test_config_path)
-            
+
             # Verify the file was created and contains the correct data
             assert test_config_path.exists()
             with open(test_config_path, "r") as f:
@@ -214,8 +214,7 @@ class TestUpdateConfig:
     def test_update_config_task_agent(self, mock_save, mock_from_file):
         """Test updating task-specific agent."""
         old_config = ADCConfig(
-            default_agent="agent",
-            task_agents={"generate": "old_agent"}
+            default_agent="agent", task_agents={"generate": "old_agent"}
         )
         mock_from_file.return_value = old_config
         mock_save.return_value = True
@@ -231,7 +230,7 @@ class TestUpdateConfig:
         """Test updating multiple configuration values."""
         old_config = ADCConfig(
             default_agent="old_agent",
-            task_agents={"generate": "old_gen", "audit": "old_audit"}
+            task_agents={"generate": "old_gen", "audit": "old_audit"},
         )
         mock_from_file.return_value = old_config
         mock_save.return_value = True
