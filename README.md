@@ -7,6 +7,8 @@ A framework for designing and building AI-driven systems using specialized roles
 
 ## 🚀 Quick Start
 
+> **📖 For detailed setup instructions, see the [Setup Guide](docs/SETUP_GUIDE.md)**
+
 ```bash
 # Install the ADC tool
 pip install -e .
@@ -219,6 +221,7 @@ pip install -e ".[all]"
 
 ## 📚 Documentation
 
+- [Setup Guide](docs/SETUP_GUIDE.md) - **Complete guide for using ADC in your projects**
 - [CLI Tool Guide](docs/README-adc-cli.md) - Detailed command usage
 - [Contract Schema](adc-schema.qmd) - Complete schema reference
 - [Contract Linting](docs/CONTRACT_LINTING.md) - Contract validation rules
