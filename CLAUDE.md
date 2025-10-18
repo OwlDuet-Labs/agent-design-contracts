@@ -39,33 +39,13 @@ pytest --cov=adc_cli --cov-report=term-missing
 pytest tests/test_providers.py -v
 ```
 
-### ADC CLI Commands
+### ADC Usage
 
-```bash
-# Generate code from contracts
-adc generate
-adc generate --agent openai
+**Normal ADC usage** should happen through:
+1. **Claude Code**: Use the `/adc` command (e.g., `/adc create contracts for XYZ`, `/adc run ADC loops`)
+2. **Direct role references**: Reference roles like `@auditor.md`, `@code_generator.md` directly in any IDE
 
-# Audit implementation compliance
-adc audit
-adc audit --src-dir ./src
-
-# Refine contracts
-adc refine contract.qmd
-
-# Lint contracts for validation
-adc lint contracts/
-
-# Validate contract syntax
-adc validate contract.qmd
-
-# Configuration management
-adc config show
-adc config set default_agent anthropic
-
-# Health check
-adc health
-```
+**The ADC CLI** is primarily for git integration and advanced workflows. For detailed instructions on normal usage, see the [README.md](README.md).
 
 ## Architecture
 
@@ -112,12 +92,15 @@ Each implementable block must include a **Parity** section linking to implementa
 
 ## Development Workflow
 
-1. **Contract Creation**: Write ADC contracts defining system components with unique IDs
-2. **Validation**: Run `adc lint` to validate contract syntax and structure
-3. **Code Generation**: Use `adc generate` to create implementation from contracts
-4. **Audit Compliance**: Run `adc audit` to verify code matches contracts
-5. **Refinement**: Use `adc refine` to improve contract quality based on insights
+**Using Claude Code** (recommended):
+1. **Contract Creation**: Use `/adc create contracts` or `@contract_writer.md` to define system components
+2. **Code Generation**: Use `@code_generator.md` to implement contracts
+3. **Audit Compliance**: Use `@auditor.md` to verify code matches contracts
+4. **Refinement**: Use `@refiner.md` to improve contract quality based on insights
+5. **Evaluation**: Use `@system_evaluator.md` to analyze compliant systems
 6. **Testing**: Run pytest to verify implementation correctness
+
+See [README.md](README.md) for detailed workflow examples.
 
 ## Important Implementation Details
 
