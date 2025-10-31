@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-design-contracts"
-version = "0.9.0"
+version = "0.9.1"
 description = "A contract-based multi-agent software dev workflow"
 readme = "README.md"
 requires-python = ">=3.9" # importlib.resources.files needs 3.9+
@@ -24,6 +24,16 @@ all = ["google-generativeai>=0.5.0", "openai>=1.0.0", "anthropic>=0.8.0"]
 # This creates the `adc` command that runs the main function
 # in the `adc_tool` package's `__main__` module.
 adc = "adc_cli.__main__:main"
+adc-setup = "adc_cli.setup:setup_user_environment"
 
 [project.urls]
 Homepage = "https://github.com/OwlDuet-Labs/agent-design-contracts"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+adc = ["roles/*.md", "schema/*.qmd", "claude/commands/*.md", "claude/agents/*.md"]

@@ -19,6 +19,7 @@ from .commands import (
     setup_vscode_command,
     validate_command,
 )
+from .command_modules.get_role_command import add_get_role_parser
 from .logging_config import configure_logging, logger
 
 
@@ -94,10 +95,13 @@ Examples:
     config_parser.add_argument("key", nargs="?", help="Configuration key to set")
     config_parser.add_argument("value", nargs="?", help="Configuration value to set")
 
-    # Setup VS Code command
-    vscode_parser = subparsers.add_parser(
-        "setup-vscode", help="Set up VS Code integration for ADC"
+    # Setup VS Code integration command
+    setup_vscode_parser = subparsers.add_parser(
+        "setup-vscode", help="Setup VS Code integration for ADC"
     )
+    
+    # Get role command
+    add_get_role_parser(subparsers)
 
     # Validate command
     validate_parser = subparsers.add_parser(
@@ -212,6 +216,10 @@ Examples:
                 json_output=args.json,
                 verbose=args.verbose
             )
+        elif args.command == "get-role":
+            # Call the function directly from args
+            args.func(args)
+            return 0
         else:
             logger.error(f"Unknown command: {args.command}")
             parser.print_help()
