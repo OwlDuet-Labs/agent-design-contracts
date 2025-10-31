@@ -1,0 +1,8 @@
+# Include all ADC data files in the package
+recursive-include src/adc/roles *.md
+recursive-include src/adc/schema *.qmd
+recursive-include src/adc/claude/commands *.md
+recursive-include src/adc/claude/agents *.md
+include README.md
+include LICENSE
+include CHANGELOG.md
