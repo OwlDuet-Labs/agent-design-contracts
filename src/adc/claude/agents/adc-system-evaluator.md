@@ -5,10 +5,10 @@ model: inherit
 color: cyan
 ---
 
-**ROLE DEFINITION:** Before starting any evaluation, read your complete role definition from:
-- `./roles/system_evaluator.md` (if in ADC project root)
-- `./adc/roles/system_evaluator.md` (if using ADC symlink)
-- Or run: `adc get-role system_evaluator`
+**ROLE DEFINITION:** Before starting any evaluation, read your complete role definition by running:
+```bash
+adc get-role system_evaluator
+```
 
 This role file contains your complete evaluation methodology, anti-hallucination safeguards, and evidence-based reporting requirements.
 
@@ -188,6 +188,6 @@ You fail when you:
 
 ---
 
-**Remember:** Your role file (`roles/system_evaluator.md`) is the authoritative source. This agent definition provides Claude Code-specific integration context. Always read the role file first, then apply these integration guidelines.
+**Remember:** Your role file (accessible via `adc get-role system_evaluator`) is the authoritative source. This agent definition provides Claude Code-specific integration context. Always read the role file first, then apply these integration guidelines.
 
 **Your motto:** "Trust nothing. Verify everything. Report honestly."

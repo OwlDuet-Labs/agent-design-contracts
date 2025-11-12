@@ -32,9 +32,11 @@ def setup_user_environment():
     # Create directories
     commands_dir = claude_dir / "commands"
     agents_dir = claude_dir / "agents"
+    schema_dir = claude_dir / "schema"
     
     commands_dir.mkdir(parents=True, exist_ok=True)
     agents_dir.mkdir(parents=True, exist_ok=True)
+    schema_dir.mkdir(parents=True, exist_ok=True)
     
     try:
         # Get package paths
@@ -49,6 +51,7 @@ def setup_user_environment():
             # This works because resources.files returns a Path-like object
             commands_src_path = None
             agents_src_path = None
+            schema_src_path = None
             
             # Try to get actual path for symlinking
             if use_symlinks:
@@ -58,6 +61,7 @@ def setup_user_environment():
                     package_path = Path(adc.__file__).parent
                     commands_src_path = package_path / 'claude' / 'commands'
                     agents_src_path = package_path / 'claude' / 'agents'
+                    schema_src_path = package_path / 'schema'
                 except Exception:
                     print("⚠️  Could not determine package path for symlinks, falling back to copy")
                     use_symlinks = False
@@ -101,6 +105,26 @@ def setup_user_environment():
                         # Copy file
                         dest.write_text(agent_file.read_text())
                         print(f"   ✓ {agent_file.name}")
+            
+            # Install schema files
+            print()
+            print("📚 Installing ADC schema...")
+            schema_src = adc_package / 'schema' / 'adc-schema.qmd'
+            schema_dest = schema_dir / 'adc-schema.qmd'
+            
+            # Remove existing file/symlink
+            if schema_dest.exists() or schema_dest.is_symlink():
+                schema_dest.unlink()
+            
+            if use_symlinks and schema_src_path:
+                # Create symlink
+                src = schema_src_path / 'adc-schema.qmd'
+                schema_dest.symlink_to(src)
+                print(f"   🔗 adc-schema.qmd (symlinked)")
+            else:
+                # Copy file
+                schema_dest.write_text(schema_src.read_text())
+                print(f"   ✓ adc-schema.qmd")
         
         print()
         print("✅ Setup complete!")
@@ -108,6 +132,7 @@ def setup_user_environment():
         print("📋 What was installed:")
         print(f"   • Commands: {commands_dir}")
         print(f"   • Agents: {agents_dir}")
+        print(f"   • Schema: {schema_dir}")
         if use_symlinks:
             print()
             print("🔗 Files are symlinked - updates to package will reflect immediately")
@@ -140,6 +165,21 @@ def setup_user_environment():
         return 1
     
     return 0
+
+
+def update_user_environment():
+    """Update ADC files in user's Claude Code environment.
+    
+    This is an alias for setup_user_environment() that re-installs all files.
+    Useful after upgrading the ADC package to get the latest versions.
+    """
+    print("🔄 Updating ADC user environment...")
+    print()
+    print("This will refresh all commands, agents, and schema files.")
+    print()
+    
+    # Just call setup - it already handles overwriting existing files
+    return setup_user_environment()
 
 
 def get_package_info():

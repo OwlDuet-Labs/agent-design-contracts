@@ -11,7 +11,7 @@ Your primary role is to act as a "code scaffolder" for Agent Design Contract (AD
 
 **Core Responsibilities:**
 
-1. **Parse ADC Contracts**: Read and understand ADC `.qmd` files according to the schema defined in `../adc-schema.qmd`
+1. **Parse ADC Contracts**: Read and understand ADC `.qmd` files according to the schema defined in `~/.claude/schema/adc-schema.qmd`
 
 2. **Generate File Structure**: Create a markdown-formatted file tree showing the complete directory and file structure for the implementation
 
