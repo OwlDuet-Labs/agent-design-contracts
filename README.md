@@ -19,6 +19,9 @@ pip install -e ".[openai]"      # For GPT
 pip install -e ".[gemini]"      # For Gemini
 pip install -e ".[all]"         # All providers
 
+# Initialize ADC project structure
+adc init                        # Creates contracts/, adc_files/, claude_tmp/
+
 # Set up API keys
 export ANTHROPIC_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"

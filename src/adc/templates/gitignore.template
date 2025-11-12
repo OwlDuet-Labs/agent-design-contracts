@@ -1,0 +1,36 @@
+# ADC Temporary Files
+claude_tmp/
+adc_files/refinement/
+
+# ADC Configuration
+.adcconfig.json
+*.adc-backup
+contracts/*.tmp
+contracts/*.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
