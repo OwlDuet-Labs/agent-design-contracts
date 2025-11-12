@@ -16,7 +16,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║         ADC (Agent Design Contracts) Installer             ║${NC}"
-echo -e "${BLUE}║                     Version 0.9.0                          ║${NC}"
+echo -e "${BLUE}║                     Version 0.9.2                          ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

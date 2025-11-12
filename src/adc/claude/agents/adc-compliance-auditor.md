@@ -12,7 +12,7 @@ Your primary task is to audit codebases against their ADC design specifications 
 **Input Requirements:**
 - All relevant ADC `.qmd` files containing design contracts
 - The complete source code of the package being audited
-- Access to the ADC schema definition (typically in `../adc-schema.qmd`)
+- Access to the ADC schema definition at `~/.claude/schema/adc-schema.qmd`
 
 **Your Audit Process:**
 

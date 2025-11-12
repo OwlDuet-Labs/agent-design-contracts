@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.9.2] - 2025-11-12
+
+### 🔧 Schema Installation & Update Command
+
+This release fixes a critical issue where ADC agents couldn't access the schema file after installation, and adds a convenient update command.
+
+### Added
+
+#### 📚 Schema Installation
+- **Schema file installation** - `adc-schema.qmd` now installed to `~/.claude/schema/`
+- **Symlink support** - Schema supports both copy and symlink modes
+- **Agent accessibility** - All agents can now reference `~/.claude/schema/adc-schema.qmd`
+
+#### 🔄 Update Command
+- **`adc-update` command** - Convenient command to refresh all Claude Code files
+- **Post-upgrade workflow** - Easy updates after package upgrades
+- **Alias for setup** - `adc-update` internally calls `adc-setup`
+
+### Changed
+
+#### 🔗 Agent References
+- **Updated all agent files** - Changed schema paths from relative to absolute
+  - `adc-contract-writer.md` - Now references `~/.claude/schema/adc-schema.qmd`
+  - `adc-contract-refiner.md` - Now references `~/.claude/schema/adc-schema.qmd`
+  - `adc-code-generator.md` - Now references `~/.claude/schema/adc-schema.qmd`
+  - `adc-code-generator-v2.md` - Now references `~/.claude/schema/adc-schema.qmd`
+  - `adc-compliance-auditor.md` - Now references `~/.claude/schema/adc-schema.qmd`
+  - `adc-workflow-orchestrator.md` - Now references `~/.claude/schema/adc-schema.qmd`
+- **Updated command file** - `.claude/commands/adc.md` now references correct schema path
+
+#### 📖 Documentation
+- **INSTALL.md** - Added schema installation to setup description
+- **INSTALL.md** - Documented `adc-update` command usage
+- **INSTALL.md** - Updated uninstall instructions to include schema file
+
+### Fixed
+- **Schema accessibility** - Agents can now properly access the ADC schema after installation
+- **Broken references** - Fixed relative path references that didn't work after installation
+- **Role file references** - Updated agents to use `adc get-role` command instead of file paths
+- **Package cleanup** - Removed deprecated agent files (v2, old versions)
+
 ## [0.9.1] - 2025-11-01
 
 ### 🎉 Major Release - Production-Ready Distribution

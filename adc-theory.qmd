@@ -1,0 +1,99 @@
+---
+
+title: "ADC Theory Reference"
+id: adc-theory-v1
+version: 0.1.0
+status: draft
+authors: "Thomas Drake"
+description: "Defines foundational concepts in the Agentic Design Contract (ADC) framework using category theory as an organizing lens."
+license: MIT
+format: adc-schema
+------------------
+
+## Purpose
+
+```{adc-purpose}
+This document establishes theoretical foundations for the Agentic Design Contract (ADC) format using category theory, focusing on how agent-based systems and the tools that interact with them can be formally described and composed.
+```
+
+## Agent Category (𝒜𝓰𝑡)
+
+```{adc-structure}
+Let 𝒜𝓰𝑡 be the category of agent-based systems. Each object \( A \in \text{Ob}(\mathcal{Agt}) \) is defined by:
+
+A = (\Sigma, I, O, T)
+
+Where:
+- \( \Sigma \): agent state space
+- \( I \): input type (e.g. prompts, events)
+- \( O \): output type (e.g. completions, actions)
+- \( T: \Sigma \times I \to \Sigma \times O \): transition function
+
+A morphism \( f: A \to B \) is a relation (transformation or wrapper) that preserves structure:
+
+f = (f_\Sigma, f_I, f_O)
+
+With compatibility constraints:
+
+- f_O(T_A(σ, i)) = T_B(f_\Sigma(σ), f_I(i))
+```
+
+## Inclusive Terminology Mapping
+
+```{adc-structure}
+| Category Theory | ADC Term           | Meaning                                     |
+|-----------------|--------------------|---------------------------------------------|
+| Object          | `Agent`            | A stateful entity with input/output behavior |
+| Morphism        | `Relation`         | An adaptation or transformation between agents |
+| Data Morphism   | `Translation`      | A structure-preserving map between data models |
+| Functor         | `Tool`             | A system that evaluates or modifies agents   |
+| Composition     | `Chaining`         | Sequencing of agents/tools                  |
+| Product         | `Multi-agent System` | Parallel agents with shared context       |
+| Arrow Category  | `Instrumented Agent` | Agent paired with tool/runtime             |
+```
+
+## Tools as Functors
+
+```{adc-structure}
+Let \( Tool: \mathcal{Agt} \times \mathcal{Rt} \to \mathcal{Perf} \) be a functor that maps an agent and runtime specification to a performance profile space (e.g., latency metrics).
+
+This allows tools like `latency_estimator` to treat agents and runtime jointly as input and produce measurable operational insights.
+```
+
+## Runtime as a First-Class Type
+
+```{adc-structure}
+By including `runtime` in the interface of tools, ADC allows tools to bisect behavior into:
+- Pure agent logic (unit testable)
+- Runtime-dependent effects (integration testable)
+
+This design preserves traceability and makes contracts more useful for deployment-aware tooling.
+```
+
+## Data Translation Morphisms
+
+```{adc-structure}
+Let \( T: D_1 \to D_2 \) be a translation morphism between data models \( D_1 \) and \( D_2 \).
+
+A translation \( T \) must satisfy:
+- **Type Safety**: \( T \) preserves essential structural invariants
+- **Validation**: \( T \) includes domain-specific constraint checking  
+- **Traceability**: \( T \) maintains audit trail of transformations
+- **Composition**: \( T_2 \circ T_1 \) where compatible types align
+
+Translation blocks enable:
+- Explicit data flow documentation between system boundaries
+- Automated validation of data model compatibility
+- Clear separation of business logic from data transformation
+- Bidirectional mapping where semantically meaningful
+```
+
+## Guidelines for Practical Use
+
+```{adc-structure}
+- Use `Relations` instead of `Morphisms` to keep terminology inclusive.
+- Use `Translation` blocks for explicit data model morphisms with validation.
+- Explicitly declare `agent_type` and `runtime` in all tool and pipeline interfaces.
+- Use composition blocks to describe agent-agent and agent-tool chains.
+- Include contract validation sections to support automated auditing.
+```
