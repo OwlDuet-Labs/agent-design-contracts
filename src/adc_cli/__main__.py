@@ -20,6 +20,7 @@ from .commands import (
     validate_command,
 )
 from .command_modules.get_role_command import add_get_role_parser
+from .command_modules.init_command import add_init_parser, init_command
 from .logging_config import configure_logging, logger
 
 
@@ -102,6 +103,9 @@ Examples:
     
     # Get role command
     add_get_role_parser(subparsers)
+    
+    # Init command
+    add_init_parser(subparsers)
 
     # Validate command
     validate_parser = subparsers.add_parser(
@@ -220,6 +224,11 @@ Examples:
             # Call the function directly from args
             args.func(args)
             return 0
+        elif args.command == "init":
+            success = init_command(
+                path=args.path,
+                force=args.force
+            )
         else:
             logger.error(f"Unknown command: {args.command}")
             parser.print_help()

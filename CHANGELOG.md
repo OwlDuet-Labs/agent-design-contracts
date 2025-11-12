@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.2] - 2025-11-12
 
-### 🔧 Schema Installation & Update Command
+### 🔧 Schema Installation, Update Command & File Organization
 
-This release fixes a critical issue where ADC agents couldn't access the schema file after installation, and adds a convenient update command.
+This release fixes a critical issue where ADC agents couldn't access the schema file after installation, adds a convenient update command, and establishes standardized file organization guidelines.
 
 ### Added
 
@@ -19,10 +19,24 @@ This release fixes a critical issue where ADC agents couldn't access the schema 
 - **Symlink support** - Schema supports both copy and symlink modes
 - **Agent accessibility** - All agents can now reference `~/.claude/schema/adc-schema.qmd`
 
+#### 📁 File Organization Guidelines
+- **Standardized directory structure** - Added comprehensive file organization section to ADC schema
+- **Workspace constraints** - Enforced rules to keep all files within project workspace
+- **Directory definitions** - Clear separation between contracts, workflow artifacts, and temporary files
+- **Git ignore patterns** - Defined which directories should be committed vs ignored
+- **File naming conventions** - Standardized naming patterns for all ADC artifacts
+
 #### 🔄 Update Command
 - **`adc-update` command** - Convenient command to refresh all Claude Code files
 - **Post-upgrade workflow** - Easy updates after package upgrades
 - **Alias for setup** - `adc-update` internally calls `adc-setup`
+
+#### 🚀 Init Command
+- **`adc init` command** - Initialize ADC project structure automatically
+- **Directory scaffolding** - Creates standardized directory structure
+- **Template .gitignore** - Installs .gitignore with ADC patterns
+- **README generation** - Creates helpful README in contracts directory
+- **Force mode** - `--force` flag to overwrite existing directories
 
 ### Changed
 
