@@ -78,7 +78,7 @@ Implement a phase and continue to the next phase until the AUDITOR confirms that
 
 **Critical Requirements:**
 - Read role files fresh each iteration
-- Follow ADC schema exactly (defined in `adc-schema.qmd`)
+- Follow ADC schema exactly (defined in `~/.claude/schema/adc-schema.qmd`)
 - Use exact prompts from role files
 - Add ADC-IMPLEMENTS: <ID> markers before classes/functions
 - Respect contract Parity sections for file locations

@@ -24,7 +24,7 @@ If you have a `.whl` file:
 
 ```bash
 # Install the wheel
-pipx install agentic_design_contracts-0.9.0-py3-none-any.whl[all]
+pipx install agentic_design_contracts-0.9.2-py3-none-any.whl[all]
 ```
 
 ### Method 3: Install from Git Repository
@@ -54,6 +54,7 @@ adc-setup
 This will:
 - ✅ Install `/adc` command for Claude Code
 - ✅ Install ADC agents (`@adc-*`) for Claude Code
+- ✅ Install ADC schema (`adc-schema.qmd`) for agent reference
 - ✅ Set up necessary directories
 
 ## 🔑 Configure API Keys
@@ -165,12 +166,14 @@ adc audit --contracts-dir ./contracts --src-dir ./src
 To update to the latest version:
 
 ```bash
-# Update from PyPI
+# Update the package from PyPI
 pipx upgrade agentic-design-contracts
 
-# Re-run setup to update Claude Code files
-adc-setup
+# Update Claude Code files (commands, agents, schema)
+adc-update
 ```
+
+**Note**: `adc-update` is a convenient alias that refreshes all installed files. You can also use `adc-setup` which does the same thing.
 
 ## 🗑️ Uninstalling
 
@@ -183,6 +186,7 @@ pipx uninstall agentic-design-contracts
 # Optionally remove Claude Code files
 rm -rf ~/.claude/commands/adc.md
 rm -rf ~/.claude/agents/adc-*.md
+rm -rf ~/.claude/schema/adc-schema.qmd
 ```
 
 ## 🆘 Troubleshooting

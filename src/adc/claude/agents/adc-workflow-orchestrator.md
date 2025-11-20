@@ -67,7 +67,7 @@ Once mode is detected, announce it:
 ### **Phase 1: REFINER** (every iteration)
 
 **Agent:** `@adc-contract-refiner`  
-**Role:** `roles/refiner.md`
+**Role:** Run `adc get-role refiner` to view complete role definition
 
 **Responsibilities:**
 - Load all contracts from `contracts/` directory (recursively)
@@ -83,7 +83,7 @@ Once mode is detected, announce it:
 ### **Phase 2: AUDITOR** (every iteration)
 
 **Agent:** `@adc-compliance-auditor`  
-**Role:** `roles/auditor.md`
+**Role:** Run `adc get-role auditor` to view complete role definition
 
 **Responsibilities:**
 - Load all contracts and source code from `src/` or `build/` directory
@@ -103,7 +103,7 @@ Once mode is detected, announce it:
 ### **Phase 3: CODE GENERATOR** (if auditor is NOT satisfied)
 
 **Agent:** `@adc-code-generator`  
-**Role:** `roles/code_generator.md`
+**Role:** Run `adc get-role code_generator` to view complete role definition
 
 **Responsibilities:**
 - Generate complete implementation following contracts
@@ -123,7 +123,7 @@ Once mode is detected, announce it:
 ### **Phase 4: EVALUATOR** (if auditor IS satisfied)
 
 **Agent:** `@adc-system-evaluator`  
-**Role:** `roles/system_evaluator.md`
+**Role:** Run `adc get-role system_evaluator` to view complete role definition
 
 **Responsibilities:**
 - Use actual CLI/MCP interfaces to run realistic scenarios
@@ -143,7 +143,7 @@ Once mode is detected, announce it:
 ### **Phase 5: PR-OR** (if evaluator validates readiness)
 
 **Agent:** `@adc-pr-orchestrator`  
-**Role:** `roles/pr_orchestrator.md`
+**Role:** Run `adc get-role pr_orchestrator` to view complete role definition
 
 **Responsibilities:**
 - Detect major contract version changes and system evolution
@@ -373,17 +373,18 @@ Display clear status for each phase:
 
 ### **1. Read Role Files Fresh Each Iteration**
 
-```markdown
-Phase 1: Read `roles/refiner.md`
-Phase 2: Read `roles/auditor.md`
-Phase 3: Read `roles/code_generator.md`
-Phase 4: Read `roles/system_evaluator.md`
-Phase 5: Read `roles/pr_orchestrator.md`
+```bash
+# Access role definitions via CLI
+adc get-role refiner
+adc get-role auditor
+adc get-role code_generator
+adc get-role system_evaluator
+adc get-role pr_orchestrator
 ```
 
 ### **2. Follow ADC Schema**
 
-- Defined in `adc-schema.qmd`
+- Defined in `~/.claude/schema/adc-schema.qmd`
 - Use exact block types and structure
 - Maintain proper contract IDs
 
