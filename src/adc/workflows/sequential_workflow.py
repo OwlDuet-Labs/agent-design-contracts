@@ -256,13 +256,12 @@ class SequentialWorkflow:
                 print(f"  [Warning] Role file not found: {role_path}")
 
     def load_contracts_summary(self) -> str:
-        """Load contracts once, create minimal summary.
+        """Load contracts once, create summary (saves 90K tokens per agent).
 
         ADC-IMPLEMENTS: <sequential-workflow-algorithm-02>
-        ADC-046: Optimized to extract only essentials (IDs, Parity paths, key requirements)
 
         Returns:
-            Minimal contract summary (3-5K tokens instead of 10K+)
+            Summarized contract content (10K tokens instead of 100K)
         """
         contracts_dir = self.workspace / "contracts"
         if not contracts_dir.exists():
@@ -273,60 +272,29 @@ class SequentialWorkflow:
         for contract_file in list(contracts_dir.glob("**/*.qmd")) + list(contracts_dir.glob("**/*.adc")):
             with open(contract_file) as f:
                 content = f.read()
-                # Extract only essentials
-                minimal = self._extract_minimal_contract_info(content, contract_file.name)
-                contracts.append(minimal)
+                contracts.append({
+                    "file": str(contract_file.name),
+                    "content": content
+                })
 
-        summary = f"# Contracts ({len(contracts)} total)\n\n"
-        summary += "\n".join(contracts)
+        # Create summary (simplified version - in production use context_summarizer.py)
+        summary_lines = [
+            f"# Contracts Summary ({len(contracts)} contracts)",
+            "",
+            f"Workspace: {self.workspace}",
+            "",
+        ]
 
-        self.contracts_summary = summary
-        return summary
+        for contract in contracts:
+            # Extract just the YAML frontmatter and first few sections
+            lines = contract["content"].split("\n")
+            # Take first 50 lines as a simple summary
+            summary_lines.append(f"## {contract['file']}")
+            summary_lines.extend(lines[:50])
+            summary_lines.append("")
 
-    def _extract_minimal_contract_info(self, content: str, filename: str) -> str:
-        """Extract minimal info: ID, Parity paths, key requirements.
-
-        ADC-046: Optimization helper to reduce contract context tokens.
-
-        Args:
-            content: Full contract content
-            filename: Contract filename
-
-        Returns:
-            Minimal contract summary (3-5 lines vs 50+ lines)
-        """
-        import re
-
-        info_lines = [f"## {filename}"]
-
-        # Extract contract ID from frontmatter
-        in_frontmatter = False
-        for line in content.split("\n"):
-            if line.strip() == "---":
-                in_frontmatter = not in_frontmatter
-            elif in_frontmatter and "id:" in line:
-                info_lines.append(line.strip())
-                break
-
-        # Extract Parity file paths only (most important for auditor)
-        parity_files = re.findall(r'\*\*File:\*\*\s+`([^`]+)`', content)
-        if parity_files:
-            info_lines.append(f"Files: {', '.join(parity_files[:10])}")  # Max 10 files per contract
-
-        # Extract first 3 requirement bullets (if any)
-        lines = content.split("\n")
-        in_requirements = False
-        req_count = 0
-        for line in lines:
-            if re.match(r'#{2,3}\s+Requirements?', line, re.IGNORECASE):
-                in_requirements = True
-            elif in_requirements and line.strip().startswith("-") and req_count < 3:
-                info_lines.append(line.strip())
-                req_count += 1
-            elif in_requirements and line.startswith("#"):
-                break
-
-        return "\n".join(info_lines)
+        self.contracts_summary = "\n".join(summary_lines)
+        return self.contracts_summary
 
     def _get_model_id(self, model_name: str) -> str:
         """Map model nickname to full model ID.
@@ -929,24 +897,6 @@ class SequentialWorkflow:
                 "error": str(e)
             }
 
-    def _get_compliance_target(self, inner_iteration: int) -> float:
-        """Return progressive compliance targets to avoid infinite loops.
-
-        ADC-047: Graduated thresholds improve convergence.
-
-        Args:
-            inner_iteration: Current inner loop iteration (0-based)
-
-        Returns:
-            Target compliance score (0.60 → 0.70 → 0.85)
-        """
-        if inner_iteration <= 2:
-            return 0.60  # Early iterations: accept 60%
-        elif inner_iteration <= 5:
-            return 0.70  # Mid iterations: require 70%
-        else:
-            return 0.85  # Late iterations: require 85%
-
     def inner_loop(self, state: WorkflowState) -> float:
         """Auditor ↔ Code Generator loop until compliance >= 0.8.
 
@@ -961,48 +911,104 @@ class SequentialWorkflow:
         state.inner_loop_active = True
 
         while True:
-            # ADC-047: Show progressive compliance target
-            compliance_target = self._get_compliance_target(state.inner_iteration)
-
             # Invoke Auditor
-            print(f"  [Auditor] Running compliance audit (iteration {state.inner_iteration}, target: {compliance_target:.0%})...")
+            print(f"  [Auditor] Running compliance audit (iteration {state.inner_iteration})...")
+            audit_prompt = f"""Audit the implementation against contracts in workspace: {self.workspace}
 
-            # ADC-044: Streamlined auditor prompt (reduced from 300 lines to 80 lines)
-            audit_prompt = f"""Audit implementation against contracts in {self.workspace}.
+CRITICAL OUTPUT REQUIREMENT:
+Your response MUST be ONLY valid JSON. No explanatory text, preamble, or markdown formatting.
+Do NOT wrap in markdown code blocks. Do NOT add comments or explanations before/after JSON.
+Return ONLY the raw JSON object as specified below.
 
-OUTPUT: Valid JSON only (no markdown, no explanations).
+Contracts Summary:
+{self.contracts_summary}
 
-STEPS (use tools):
-1. list_directory("contracts") → read each .qmd → extract Parity file paths (format: **File:** `path`)
-2. read_file() each expected path → check existence and count markers
-3. Count ADC-IMPLEMENTS markers vs total functions/classes (def/class keywords)
-4. Score using: Discovery(40%), Markers(40%), Quality(20%)
+## STEP-BY-STEP AUDIT ALGORITHM
 
-SCORING:
-- Discovery: 40pts if files exist, 20pts if partial, 0pts if none
-- Markers: 40pts if 90-100%, 30pts if 70-89%, 20pts if 50-69%, 10pts if <50%
-- Quality: 20pts if structure matches Parity, 15pts minor issues, 5pts major, 0pts critical
+You MUST follow these steps EXACTLY in order, using the provided tools:
 
-JSON SCHEMA:
+**STEP 1: Extract expected file paths from contract Parity sections**
+- Call list_directory("contracts") to get all contract files
+- For EACH contract file (.qmd), call read_file("contracts/filename.qmd")
+- Search for "## Parity" sections in each contract
+- Extract file paths from lines like: **File:** `src/models.py`
+- Collect all file paths into a list (e.g., ["src/models.py", "src/database.py", "tests/test_models.py"])
+
+**STEP 2: Discover and verify implementation files**
+- For EACH file path from Step 1, call read_file(filepath) to check if it exists
+- If file doesn't exist: Mark as "missing implementation"
+- If file exists: Count ADC-IMPLEMENTS markers (lines starting with "# ADC-IMPLEMENTS:")
+- Also call list_directory("src") to find any additional Python files not in Parity sections
+- Count total functions and classes in each file (lines with "def " or "class ")
+
+**STEP 3: Calculate compliance scores**
+Use this THREE-PHASE scoring system:
+
+### PHASE 1: Implementation Discovery (40% weight)
+- Found Python files in expected locations: 40 points
+- Found some files but not in expected locations: 20 points
+- No Python files found: 0 points
+
+### PHASE 2: Marker Verification (40% weight)
+- 90-100% of functions/classes have ADC-IMPLEMENTS markers: 40 points
+- 70-89% have markers: 30 points
+- 50-69% have markers: 20 points
+- <50% have markers: 10 points
+- No files found: 0 points
+
+### PHASE 3: Implementation Quality (20% weight)
+- Check if file structure matches contract Parity sections
+- Verify function signatures match contract specifications
+- Score: 20 (perfect), 15 (minor issues), 5 (major issues), 0 (critical issues)
+
+**STEP 4: Generate JSON response**
+compliance_score = (phase1_score + phase2_score + phase3_score) / 100.0
+
+Return this EXACT JSON structure (with actual data from Steps 1-3):
 {{
   "compliance_score": 0.85,
-  "phase_scores": {{"implementation_discovery": 40, "marker_verification": 35, "implementation_quality": 15}},
-  "files_expected_from_parity": ["src/api.py", "tests/test_api.py"],
-  "files_checked": ["src/api.py"],
-  "files_missing": ["tests/test_api.py"],
+  "phase_scores": {{
+    "implementation_discovery": 40,
+    "marker_verification": 35,
+    "implementation_quality": 15
+  }},
+  "files_checked": ["src/models.py", "src/database.py"],
+  "files_expected_from_parity": ["src/models.py", "src/database.py", "tests/test_models.py"],
+  "files_missing": ["tests/test_models.py"],
   "implementation_exists": true,
   "markers_present": 12,
   "markers_missing": 3,
   "total_items": 15,
   "environment_issues": [],
   "implementation_issues": [
-    "Missing ADC-IMPLEMENTS marker in src/api.py:15 (function init)",
-    "Missing file: tests/test_api.py (from Parity)"
-  ]
+    "Missing ADC-IMPLEMENTS marker in src/models.py:15 (function Task.__init__)",
+    "Missing implementation file: tests/test_models.py (specified in contract Parity)"
+  ],
+  "compliant_items": 12,
+  "total_items": 15
 }}
 
-CRITICAL: Use read_file() to discover files from Parity sections. Don't assume paths.
-If ALL files missing, return {{"compliance_score": 0.0, "error": "No files found", "files_expected_from_parity": [...], "files_missing": [...]}}.
+## IMPORTANT: You MUST Use Tools!
+
+**DO NOT just return an error!** You must:
+1. Actually call list_directory("contracts") to get contract files
+2. Actually call read_file() for EACH contract to extract Parity sections
+3. Extract file paths from **File:** `path/to/file.py` patterns in Parity sections
+4. Actually call read_file() for EACH file path from Parity sections
+5. Count ADC-IMPLEMENTS markers in each file
+6. Calculate actual compliance scores based on what you found
+7. Return the JSON with real data (not placeholders)
+
+**File Discovery is CRITICAL:**
+- You MUST read contracts to find out which files should exist
+- Do NOT assume files are in src/ - use Parity sections to know the actual paths
+- Parity sections specify the expected implementation files with format: **File:** `src/models.py`
+
+**Only return an error if tools fail:**
+If read_file tools return "file not found" errors for ALL expected files, then you can return:
+{{"compliance_score": 0.0, "error": "No implementation files found (all files from Parity sections missing)", "files_expected_from_parity": ["list", "of", "paths"], "files_missing": ["all", "paths"]}}
+
+But if ANY files exist, you MUST calculate actual scores!
 """
 
             audit_result = self.invoke_agent(
@@ -1174,10 +1180,9 @@ If ALL files missing, return {{"compliance_score": 0.0, "error": "No files found
                 state.inner_loop_active = False
                 return compliance
 
-            # ADC-047: Progressive compliance threshold (60% → 70% → 85%)
-            compliance_target = self._get_compliance_target(state.inner_iteration)
-            if compliance >= compliance_target:
-                print(f"    SUCCESS: Compliance target met ({compliance:.1%} >= {compliance_target:.1%})")
+            # Exit if compliant
+            if compliance >= 0.8:
+                print(f"    SUCCESS: Compliance threshold met ({compliance:.1%})")
                 state.inner_loop_active = False
                 return compliance
 
@@ -1242,22 +1247,31 @@ Focus ONLY on fixing the implementation issues listed above.
 
                     print(f"      [Generating] {file_path} ({len(file_issues)} issues)...")
 
+                    # Get current workspace context
+                    workspace_context = self._list_workspace_files()
+
                     # Check if this is a stub file completion
                     is_stub = file_issues == ["Complete stub implementation"]
 
-                    # ADC-045: Optimized code generator prompt (removed repeated contract summary and workspace context)
-                    file_prompt = f"""{"Complete" if is_stub else "Fix"} {file_path}.
+                    file_prompt = f"""{"Complete stub file" if is_stub else "Generate/fix"} ONLY {file_path}.
 
-Issues:
-{chr(10).join(f"- {issue}" for issue in file_issues[:5])}
+Contracts Summary:
+{self.contracts_summary}
 
-Requirements:
-- Add ADC-IMPLEMENTS markers before classes/functions
-- Follow contract specs (use read_file("contracts/...qmd") to check Parity for {file_path})
-- Focus only on this file, don't modify others
-{"- File exists as stub - complete implementations" if is_stub else ""}
+Existing workspace files:
+{workspace_context}
 
-Use read_file() to check relevant contract for specifications.
+Requirements for THIS FILE ONLY:
+{chr(10).join(f"- {issue}" for issue in file_issues)}
+{env_context}
+
+IMPORTANT CONSTRAINTS:
+- Focus ONLY on {file_path}
+{"- The file already exists as a stub with ADC-IMPLEMENTS markers - complete the implementations" if is_stub else "- Add ADC-IMPLEMENTS markers before each class/function"}
+- Follow contract specifications exactly
+- Maintain existing functionality in this file
+- DO NOT modify other files (they will be processed separately)
+- DO NOT try to fix import errors or environment issues
 """
 
                     codegen_result = self.invoke_agent(
@@ -1294,17 +1308,20 @@ Use read_file() to check relevant contract for specifications.
                 print("    [Fallback] No specific files or stubs identified, using global approach...")
                 issues_summary = "\n".join(f"- {issue}" for issue in implementation_issues[:10])
 
-                # ADC-045: Optimized fallback prompt (streamlined, contracts accessible via read_file)
-                codegen_prompt = f"""Fix compliance issues.
+                codegen_prompt = f"""Fix contract compliance implementation issues.
 
-Issues (top 10):
+Contracts Summary:
+{self.contracts_summary}
+
+Implementation issues to fix:
 {issues_summary}
+{env_context}
 
 Requirements:
-- Add ADC-IMPLEMENTS markers before classes/functions
-- Follow contract specs (use read_file("contracts/...qmd"))
+- Add ADC-IMPLEMENTS markers before each class/function
+- Follow contract specifications exactly
 - Maintain existing functionality
-- Ignore import/environment errors (handled separately)
+- DO NOT try to fix import errors or environment issues (those will be resolved separately)
 """
 
                 codegen_result = self.invoke_agent(
