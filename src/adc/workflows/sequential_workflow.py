@@ -909,16 +909,19 @@ Contracts Summary:
 
 You MUST follow these steps EXACTLY in order, using the provided tools:
 
-**STEP 1: Discover Python files**
-- Call list_directory("src") to check if src/ directory exists
-- If src/ exists, call list_directory("src") to see .py files
-- If src/ doesn't exist, call list_directory(".") to check root directory
-- Store the list of .py files you find (REQUIRED: You must actually call the tools!)
+**STEP 1: Extract expected file paths from contract Parity sections**
+- Call list_directory("contracts") to get all contract files
+- For EACH contract file (.qmd), call read_file("contracts/filename.qmd")
+- Search for "## Parity" sections in each contract
+- Extract file paths from lines like: **File:** `src/models.py`
+- Collect all file paths into a list (e.g., ["src/models.py", "src/database.py", "tests/test_models.py"])
 
-**STEP 2: Read each Python file**
-- For EACH .py file found in Step 1, call read_file(filename)
-- Count ADC-IMPLEMENTS markers (lines starting with "# ADC-IMPLEMENTS:")
-- Count total functions and classes (lines with "def " or "class ")
+**STEP 2: Discover and verify implementation files**
+- For EACH file path from Step 1, call read_file(filepath) to check if it exists
+- If file doesn't exist: Mark as "missing implementation"
+- If file exists: Count ADC-IMPLEMENTS markers (lines starting with "# ADC-IMPLEMENTS:")
+- Also call list_directory("src") to find any additional Python files not in Parity sections
+- Count total functions and classes in each file (lines with "def " or "class ")
 
 **STEP 3: Calculate compliance scores**
 Use this THREE-PHASE scoring system:
@@ -943,7 +946,7 @@ Use this THREE-PHASE scoring system:
 **STEP 4: Generate JSON response**
 compliance_score = (phase1_score + phase2_score + phase3_score) / 100.0
 
-Return this EXACT JSON structure:
+Return this EXACT JSON structure (with actual data from Steps 1-3):
 {{
   "compliance_score": 0.85,
   "phase_scores": {{
@@ -951,14 +954,17 @@ Return this EXACT JSON structure:
     "marker_verification": 35,
     "implementation_quality": 15
   }},
-  "files_checked": ["src/main.py", "src/models.py"],
+  "files_checked": ["src/models.py", "src/database.py"],
+  "files_expected_from_parity": ["src/models.py", "src/database.py", "tests/test_models.py"],
+  "files_missing": ["tests/test_models.py"],
   "implementation_exists": true,
   "markers_present": 12,
   "markers_missing": 3,
   "total_items": 15,
   "environment_issues": [],
   "implementation_issues": [
-    "Missing ADC-IMPLEMENTS marker in src/main.py:15 (function create_app)"
+    "Missing ADC-IMPLEMENTS marker in src/models.py:15 (function Task.__init__)",
+    "Missing implementation file: tests/test_models.py (specified in contract Parity)"
   ],
   "compliant_items": 12,
   "total_items": 15
@@ -967,16 +973,24 @@ Return this EXACT JSON structure:
 ## IMPORTANT: You MUST Use Tools!
 
 **DO NOT just return an error!** You must:
-1. Actually call list_directory() tool to find files
-2. Actually call read_file() tool to read each file
-3. Count markers and calculate scores
-4. Return the JSON with actual data
+1. Actually call list_directory("contracts") to get contract files
+2. Actually call read_file() for EACH contract to extract Parity sections
+3. Extract file paths from **File:** `path/to/file.py` patterns in Parity sections
+4. Actually call read_file() for EACH file path from Parity sections
+5. Count ADC-IMPLEMENTS markers in each file
+6. Calculate actual compliance scores based on what you found
+7. Return the JSON with real data (not placeholders)
+
+**File Discovery is CRITICAL:**
+- You MUST read contracts to find out which files should exist
+- Do NOT assume files are in src/ - use Parity sections to know the actual paths
+- Parity sections specify the expected implementation files with format: **File:** `src/models.py`
 
 **Only return an error if tools fail:**
-If list_directory or read_file tools return errors, then you can return:
-{{"compliance_score": 0.0, "error": "Tool execution failed: <error details>"}}
+If read_file tools return "file not found" errors for ALL expected files, then you can return:
+{{"compliance_score": 0.0, "error": "No implementation files found (all files from Parity sections missing)", "files_expected_from_parity": ["list", "of", "paths"], "files_missing": ["all", "paths"]}}
 
-But if tools work, you MUST calculate actual scores!
+But if ANY files exist, you MUST calculate actual scores!
 """
 
             audit_result = self.invoke_agent(
@@ -1035,14 +1049,22 @@ But if tools work, you MUST calculate actual scores!
                     implementation_issues = violations
 
                 files_checked = audit_data.get("files_checked", [])
+                files_expected = audit_data.get("files_expected_from_parity", [])
+                files_missing = audit_data.get("files_missing", [])
                 compliant_items = audit_data.get("compliant_items", 0)
                 total_items = audit_data.get("total_items", 0)
 
                 # Log detailed audit results
                 print(f"    Implementation exists: {implementation_exists}")
+                print(f"    Files expected (from Parity): {len(files_expected)}")
+                if files_expected:
+                    print(f"      {', '.join(files_expected[:5])}{' ...' if len(files_expected) > 5 else ''}")
                 print(f"    Files checked: {len(files_checked)}")
                 if files_checked:
                     print(f"      {', '.join(files_checked[:5])}{' ...' if len(files_checked) > 5 else ''}")
+                if files_missing:
+                    print(f"    Files missing: {len(files_missing)}")
+                    print(f"      {', '.join(files_missing[:5])}{' ...' if len(files_missing) > 5 else ''}")
                 print(f"    Markers: {markers_present}/{total_items} present, {markers_missing} missing")
                 print(f"    Phase scores: Discovery={phase_scores.get('implementation_discovery', 'N/A')}, Markers={phase_scores.get('marker_verification', 'N/A')}, Quality={phase_scores.get('implementation_quality', 'N/A')}")
                 print(f"    Environment issues: {len(environment_issues)}")
@@ -1122,6 +1144,8 @@ But if tools work, you MUST calculate actual scores!
                         "markers_present": markers_present,
                         "markers_missing": markers_missing,
                         "files_checked": files_checked,
+                        "files_expected_from_parity": files_expected if 'files_expected' in locals() else [],
+                        "files_missing": files_missing if 'files_missing' in locals() else [],
                         "environment_issues": environment_issues,
                         "implementation_issues": implementation_issues,
                         "violations": violations,  # Legacy field for backward compatibility
