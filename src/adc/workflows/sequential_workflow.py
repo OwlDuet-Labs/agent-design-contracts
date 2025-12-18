@@ -731,7 +731,7 @@ class SequentialWorkflow:
         total_cache_read_tokens = 0
 
         start_time = time.time()
-        max_iterations = 30  # Allow more tools for complex single-file operations (ADC-035)
+        max_iterations = 40  # Increased from 30 to support complex multi-agent workflows (ADC-042)
         iteration = 0
 
         try:
