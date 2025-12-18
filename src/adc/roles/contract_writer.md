@@ -40,7 +40,31 @@ A complete ADC contract file (`.qmd` format) with:
 4. **`Parity Section Requirements`**
    * Follow the Parity section structure defined in `../adc-schema.qmd`
    * Ensure all implementable blocks include required Parity elements per schema
-   * Refer to schema for complete Parity section requirements and examples
+   * **CRITICAL: Every contract MUST include a Parity section specifying implementation files**
+   * **REQUIRED FORMAT:**
+     ```markdown
+     ## Parity
+
+     This contract is implemented by the following files:
+
+     **File:** `src/models.py`
+     - Task data models
+     - `ADC-IMPLEMENTS: database.data_model`
+     - `ADC-IMPLEMENTS: api.data_model`
+
+     **File:** `src/database.py`
+     - Database connection and session management
+     - `ADC-IMPLEMENTS: database.connection_management`
+     ```
+   * **File Path Requirements:**
+     - Use backticks around file paths: **File:** \`src/models.py\`
+     - File paths should be relative to workspace root
+     - Include file extension (.py, .ts, .go, etc.)
+     - One **File:** entry per implementation file
+   * **ADC-IMPLEMENTS Markers:**
+     - List specific contract IDs implemented by each file
+     - Use backtick-wrapped format: \`ADC-IMPLEMENTS: contract-id\`
+     - Multiple markers per file are allowed and encouraged
    * **IMPORTANT: Organize contracts with no more than 8 contracts per directory, using auto-incrementing numbers (001 for overview, 002+ for components) to maintain a balanced context hierarchy.**
 
 5. **`Quality and Completeness Standards`**
@@ -83,6 +107,36 @@ A complete ADC contract file (`.qmd` format) with:
 
 **Example Invocation:**
 "Please create an ADC contract for a user authentication system that supports multiple providers (OAuth, SAML, local), includes session management, and has audit logging capabilities. The system should be scalable and secure."
+
+**Example Parity Section:**
+
+When creating a REST API contract, you MUST include a Parity section like this:
+
+```markdown
+## Parity
+
+This contract is implemented by the following files:
+
+**File:** `src/api.py`
+- Main FastAPI application and routes
+- `ADC-IMPLEMENTS: rest-api.app_initialization`
+- `ADC-IMPLEMENTS: rest-api.route_definitions`
+
+**File:** `src/models.py`
+- Data models for API requests and responses
+- `ADC-IMPLEMENTS: rest-api.data_models`
+- `ADC-IMPLEMENTS: rest-api.validation`
+
+**File:** `tests/test_api.py`
+- API endpoint tests
+- `ADC-IMPLEMENTS: rest-api.testing`
+```
+
+**Why This Matters:**
+- The stub creation feature uses Parity sections to generate initial file structures
+- Code generators use file paths to know which files to create/modify
+- Auditors use ADC-IMPLEMENTS markers to verify contract compliance
+- Without proper Parity sections, the automated workflow cannot function
 
 **CONTRACT CREATION GUIDANCE:**
 * Refer to `../adc-schema.qmd` for complete structural examples and templates
