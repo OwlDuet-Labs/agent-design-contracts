@@ -20,10 +20,10 @@ from .state import WorkflowState, WorkflowResult
 
 
 # Model selection: Use Haiku for simple agents, Sonnet for complex reasoning
-# contract-writer uses Sonnet because contract creation requires strong reasoning
+# CRITICAL FIX: Auditor needs Sonnet - Haiku fails to use tools properly for file discovery
 AGENT_MODELS_HAIKU = {
     "@adc-contract-writer": "haiku",  # Haiku for cost-effective contract creation
-    "@adc-compliance-auditor": "haiku",
+    "@adc-compliance-auditor": "sonnet",  # FIXED: Sonnet required for reliable tool usage
     "@adc-contract-refiner": "haiku",
     "@adc-pr-orchestrator": "haiku",
     "@adc-code-generator": "sonnet",  # Sonnet for complex code generation
@@ -902,70 +902,48 @@ Your response MUST be ONLY valid JSON. No explanatory text, preamble, or markdow
 Do NOT wrap in markdown code blocks. Do NOT add comments or explanations before/after JSON.
 Return ONLY the raw JSON object as specified below.
 
-If you cannot complete the audit due to errors, return:
-{{"compliance_score": 0.0, "error": "explanation of what went wrong"}}
-
 Contracts Summary:
 {self.contracts_summary}
 
-## MULTI-PHASE COMPLIANCE AUDIT
+## STEP-BY-STEP AUDIT ALGORITHM
 
-You must perform this audit in THREE distinct phases and report results separately:
+You MUST follow these steps EXACTLY in order, using the provided tools:
+
+**STEP 1: Discover Python files**
+- Call list_directory("src") to check if src/ directory exists
+- If src/ exists, call list_directory("src") to see .py files
+- If src/ doesn't exist, call list_directory(".") to check root directory
+- Store the list of .py files you find (REQUIRED: You must actually call the tools!)
+
+**STEP 2: Read each Python file**
+- For EACH .py file found in Step 1, call read_file(filename)
+- Count ADC-IMPLEMENTS markers (lines starting with "# ADC-IMPLEMENTS:")
+- Count total functions and classes (lines with "def " or "class ")
+
+**STEP 3: Calculate compliance scores**
+Use this THREE-PHASE scoring system:
 
 ### PHASE 1: Implementation Discovery (40% weight)
-1. Use list_directory tool to explore workspace structure
-2. Look for implementation files in these locations:
-   - src/ directory (most common)
-   - Root workspace directory (*.py files)
-   - build/ directory (if exists)
-3. Check if expected files from contract Parity sections exist
-4. Score:
-   - All expected files exist: 40 points
-   - Some files exist: 20 points
-   - No files exist: 0 points
+- Found Python files in expected locations: 40 points
+- Found some files but not in expected locations: 20 points
+- No Python files found: 0 points
 
 ### PHASE 2: Marker Verification (40% weight)
-1. Use read_file tool to check each Python file for ADC-IMPLEMENTS markers
-2. ADC-IMPLEMENTS markers should appear as comments like:
-   - # ADC-IMPLEMENTS: <contract-id>
-   - # ADC-IMPLEMENTS: contract_name.adc
-   - # @contract_name: some_contract
-3. Count total classes/functions vs. those with markers
-4. Score:
-   - 90-100% of items have markers: 40 points
-   - 70-89% have markers: 30 points
-   - 50-69% have markers: 20 points
-   - <50% have markers: 10 points
+- 90-100% of functions/classes have ADC-IMPLEMENTS markers: 40 points
+- 70-89% have markers: 30 points
+- 50-69% have markers: 20 points
+- <50% have markers: 10 points
+- No files found: 0 points
 
 ### PHASE 3: Implementation Quality (20% weight)
-1. Check if implementation structure matches contract specifications
-2. Identify actual implementation issues (wrong logic, missing functions)
-3. **CRITICAL**: Distinguish between:
-   - **Environment Issues**: Import errors, missing dependencies, path issues
-   - **Implementation Issues**: Wrong logic, missing required methods, incorrect structure
-4. Score:
-   - No implementation issues: 20 points
-   - Minor issues: 15 points
-   - Major issues: 5 points
-   - Critical issues: 0 points
+- Check if file structure matches contract Parity sections
+- Verify function signatures match contract specifications
+- Score: 20 (perfect), 15 (minor issues), 5 (major issues), 0 (critical issues)
 
-## IMPORTANT: Environment vs. Implementation Issues
+**STEP 4: Generate JSON response**
+compliance_score = (phase1_score + phase2_score + phase3_score) / 100.0
 
-**Environment Issues (DON'T penalize compliance):**
-- ModuleNotFoundError for correctly named modules
-- Import path errors where the module file exists
-- Missing external dependencies (can be fixed with pip install)
-- Database connection errors (environment configuration)
-
-**Implementation Issues (DO penalize compliance):**
-- Missing required functions/classes specified in contract
-- Incorrect function signatures
-- Wrong logic that doesn't match contract specifications
-- Missing ADC-IMPLEMENTS markers on existing code
-
-## JSON Response Format
-
-Return compliance score (0.0-1.0) and detailed breakdown in JSON format:
+Return this EXACT JSON structure:
 {{
   "compliance_score": 0.85,
   "phase_scores": {{
@@ -978,22 +956,27 @@ Return compliance score (0.0-1.0) and detailed breakdown in JSON format:
   "markers_present": 12,
   "markers_missing": 3,
   "total_items": 15,
-  "environment_issues": [
-    "ModuleNotFoundError: No module named 'task_api' in tests/test_api.py - this is likely a PYTHONPATH issue, not an implementation issue"
-  ],
+  "environment_issues": [],
   "implementation_issues": [
-    "Missing ADC-IMPLEMENTS marker in src/main.py:15 (function create_app)",
-    "Function signature in src/models.py:20 does not match contract specification"
+    "Missing ADC-IMPLEMENTS marker in src/main.py:15 (function create_app)"
   ],
   "compliant_items": 12,
   "total_items": 15
 }}
 
-**If you find NO Python files in the workspace:**
-Set compliance_score to 0.0 and phase_scores to all zeros.
+## IMPORTANT: You MUST Use Tools!
 
-**Calculate final compliance_score:**
-compliance_score = (phase_scores.implementation_discovery + phase_scores.marker_verification + phase_scores.implementation_quality) / 100.0
+**DO NOT just return an error!** You must:
+1. Actually call list_directory() tool to find files
+2. Actually call read_file() tool to read each file
+3. Count markers and calculate scores
+4. Return the JSON with actual data
+
+**Only return an error if tools fail:**
+If list_directory or read_file tools return errors, then you can return:
+{{"compliance_score": 0.0, "error": "Tool execution failed: <error details>"}}
+
+But if tools work, you MUST calculate actual scores!
 """
 
             audit_result = self.invoke_agent(
@@ -1011,6 +994,30 @@ compliance_score = (phase_scores.implementation_discovery + phase_scores.marker_
             if audit_data is not None:
                 # Successfully extracted JSON
                 compliance = audit_data.get("compliance_score", 0.0)
+
+                # Check for error response from auditor
+                audit_error = audit_data.get("error")
+                if audit_error:
+                    print(f"    [Auditor Error] {audit_error}")
+                    # Check if this is a "no files found" error when files actually exist
+                    # This indicates auditor is not using tools properly
+                    if "no python" in audit_error.lower() or "no implementation" in audit_error.lower():
+                        # Do a quick sanity check - do Python files exist?
+                        py_files = list(self.workspace.rglob("*.py"))
+                        excluded_dirs = {"contracts", ".venv", "__pycache__", ".git", ".adc"}
+                        py_files = [f for f in py_files if not any(part in excluded_dirs for part in f.parts)]
+
+                        if py_files:
+                            print(f"    [CRITICAL BUG] Auditor claims no Python files exist, but found {len(py_files)} files:")
+                            for f in py_files[:5]:
+                                print(f"      - {f.relative_to(self.workspace)}")
+                            if len(py_files) > 5:
+                                print(f"      ... and {len(py_files) - 5} more")
+                            print(f"    [WORKAROUND] Auditor is not using tools properly - forcing stagnation detection")
+                            # Force stagnation to break the loop
+                            self.progress.add_score(0.0)
+                            self.progress.add_score(0.0)
+                            self.progress.add_score(0.0)
 
                 # Extract phase scores for debugging
                 phase_scores = audit_data.get("phase_scores", {})
