@@ -913,102 +913,41 @@ class SequentialWorkflow:
         while True:
             # Invoke Auditor
             print(f"  [Auditor] Running compliance audit (iteration {state.inner_iteration})...")
-            audit_prompt = f"""Audit the implementation against contracts in workspace: {self.workspace}
+            # ADC-044-A: Streamlined auditor prompt (75% reduction while maintaining functionality)
+            audit_prompt = f"""Audit implementation against contracts. Workspace: {self.workspace}
 
-CRITICAL OUTPUT REQUIREMENT:
-Your response MUST be ONLY valid JSON. No explanatory text, preamble, or markdown formatting.
-Do NOT wrap in markdown code blocks. Do NOT add comments or explanations before/after JSON.
-Return ONLY the raw JSON object as specified below.
+OUTPUT: Return ONLY valid JSON (no markdown, no explanations).
 
-Contracts Summary:
-{self.contracts_summary}
+Contracts: {self.contracts_summary}
 
-## STEP-BY-STEP AUDIT ALGORITHM
+AUDIT STEPS:
+1. Read contracts from "contracts/" directory - extract Parity file paths (**File:** `path/file.py`)
+2. Check each file: count ADC-IMPLEMENTS markers vs functions/classes
+3. Score compliance using 3-phase system (40% discovery + 40% markers + 20% quality)
+4. Return JSON with scores, issues, and file lists
 
-You MUST follow these steps EXACTLY in order, using the provided tools:
+SCORING:
+- Phase 1 (40%): Files in expected locations? (40=all, 20=some, 0=none)
+- Phase 2 (40%): Marker coverage? (40=90%+, 30=70-89%, 20=50-69%, 10=<50%)
+- Phase 3 (20%): Structure matches contracts? (20=perfect, 15=minor, 5=major, 0=critical)
 
-**STEP 1: Extract expected file paths from contract Parity sections**
-- Call list_directory("contracts") to get all contract files
-- For EACH contract file (.qmd), call read_file("contracts/filename.qmd")
-- Search for "## Parity" sections in each contract
-- Extract file paths from lines like: **File:** `src/models.py`
-- Collect all file paths into a list (e.g., ["src/models.py", "src/database.py", "tests/test_models.py"])
-
-**STEP 2: Discover and verify implementation files**
-- For EACH file path from Step 1, call read_file(filepath) to check if it exists
-- If file doesn't exist: Mark as "missing implementation"
-- If file exists: Count ADC-IMPLEMENTS markers (lines starting with "# ADC-IMPLEMENTS:")
-- Also call list_directory("src") to find any additional Python files not in Parity sections
-- Count total functions and classes in each file (lines with "def " or "class ")
-
-**STEP 3: Calculate compliance scores**
-Use this THREE-PHASE scoring system:
-
-### PHASE 1: Implementation Discovery (40% weight)
-- Found Python files in expected locations: 40 points
-- Found some files but not in expected locations: 20 points
-- No Python files found: 0 points
-
-### PHASE 2: Marker Verification (40% weight)
-- 90-100% of functions/classes have ADC-IMPLEMENTS markers: 40 points
-- 70-89% have markers: 30 points
-- 50-69% have markers: 20 points
-- <50% have markers: 10 points
-- No files found: 0 points
-
-### PHASE 3: Implementation Quality (20% weight)
-- Check if file structure matches contract Parity sections
-- Verify function signatures match contract specifications
-- Score: 20 (perfect), 15 (minor issues), 5 (major issues), 0 (critical issues)
-
-**STEP 4: Generate JSON response**
-compliance_score = (phase1_score + phase2_score + phase3_score) / 100.0
-
-Return this EXACT JSON structure (with actual data from Steps 1-3):
+JSON FORMAT:
 {{
   "compliance_score": 0.85,
-  "phase_scores": {{
-    "implementation_discovery": 40,
-    "marker_verification": 35,
-    "implementation_quality": 15
-  }},
-  "files_checked": ["src/models.py", "src/database.py"],
-  "files_expected_from_parity": ["src/models.py", "src/database.py", "tests/test_models.py"],
-  "files_missing": ["tests/test_models.py"],
+  "phase_scores": {{"implementation_discovery": 40, "marker_verification": 35, "implementation_quality": 15}},
+  "files_checked": ["src/file.py"],
+  "files_expected_from_parity": ["src/file.py", "tests/test.py"],
+  "files_missing": ["tests/test.py"],
   "implementation_exists": true,
   "markers_present": 12,
   "markers_missing": 3,
   "total_items": 15,
   "environment_issues": [],
-  "implementation_issues": [
-    "Missing ADC-IMPLEMENTS marker in src/models.py:15 (function Task.__init__)",
-    "Missing implementation file: tests/test_models.py (specified in contract Parity)"
-  ],
-  "compliant_items": 12,
-  "total_items": 15
+  "implementation_issues": ["Missing marker in src/file.py:15", "Missing tests/test.py"],
+  "compliant_items": 12
 }}
 
-## IMPORTANT: You MUST Use Tools!
-
-**DO NOT just return an error!** You must:
-1. Actually call list_directory("contracts") to get contract files
-2. Actually call read_file() for EACH contract to extract Parity sections
-3. Extract file paths from **File:** `path/to/file.py` patterns in Parity sections
-4. Actually call read_file() for EACH file path from Parity sections
-5. Count ADC-IMPLEMENTS markers in each file
-6. Calculate actual compliance scores based on what you found
-7. Return the JSON with real data (not placeholders)
-
-**File Discovery is CRITICAL:**
-- You MUST read contracts to find out which files should exist
-- Do NOT assume files are in src/ - use Parity sections to know the actual paths
-- Parity sections specify the expected implementation files with format: **File:** `src/models.py`
-
-**Only return an error if tools fail:**
-If read_file tools return "file not found" errors for ALL expected files, then you can return:
-{{"compliance_score": 0.0, "error": "No implementation files found (all files from Parity sections missing)", "files_expected_from_parity": ["list", "of", "paths"], "files_missing": ["all", "paths"]}}
-
-But if ANY files exist, you MUST calculate actual scores!
+CRITICAL: Use tools (list_directory, read_file) to gather real data. Do NOT return error unless ALL files missing.
 """
 
             audit_result = self.invoke_agent(
