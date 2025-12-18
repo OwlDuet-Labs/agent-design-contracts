@@ -22,7 +22,7 @@ from .state import WorkflowState, WorkflowResult
 # Model selection: Use Haiku for simple agents, Sonnet for complex reasoning
 # CRITICAL FIX: Auditor needs Sonnet - Haiku fails to use tools properly for file discovery
 AGENT_MODELS_HAIKU = {
-    "@adc-contract-writer": "haiku",  # Haiku for cost-effective contract creation
+    "@adc-contract-writer": "sonnet",  # FIXED ADC-040: Sonnet required for reliable Parity sections (Haiku has 100% failure rate)
     "@adc-compliance-auditor": "sonnet",  # FIXED: Sonnet required for reliable tool usage
     "@adc-contract-refiner": "haiku",
     "@adc-pr-orchestrator": "haiku",
@@ -1550,12 +1550,29 @@ Return result in JSON format:
                     total_cost=state.calculate_total_cost()
                 )
 
-            # Parse evaluator result
-            try:
-                eval_data = json.loads(evaluator_result["response"])
-                satisfied = eval_data.get("satisfied", False)
-                feedback = eval_data.get("feedback", "")
-            except (json.JSONDecodeError, AttributeError):
+            # Parse evaluator result with JSON extraction fallback (ADC-040 fix)
+            eval_data = self._extract_json_from_response(evaluator_result["response"])
+
+            if eval_data is not None:
+                # Successfully extracted JSON - handle both formats
+                # Format 1: Direct {"satisfied": true, "feedback": "..."}
+                # Format 2: Nested {"FINAL_VERDICT": {"satisfied": true, ...}}
+                if "FINAL_VERDICT" in eval_data:
+                    verdict = eval_data["FINAL_VERDICT"]
+                    satisfied = verdict.get("satisfied", False)
+                    feedback = verdict.get("summary", verdict.get("feedback", ""))
+                else:
+                    satisfied = eval_data.get("satisfied", False)
+                    feedback = eval_data.get("feedback", "")
+            else:
+                # JSON extraction failed - provide detailed diagnostics
+                print(f"    [Error] Failed to extract JSON from evaluator response")
+                print(f"    Response length: {len(evaluator_result['response'])} characters")
+                print(f"    Response preview (first 300 chars):")
+                print(f"    {evaluator_result['response'][:300]}")
+                if len(evaluator_result['response']) > 300:
+                    print(f"    Response preview (last 100 chars):")
+                    print(f"    ...{evaluator_result['response'][-100:]}")
                 satisfied = False
                 feedback = evaluator_result["response"]
 
