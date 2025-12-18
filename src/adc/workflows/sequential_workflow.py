@@ -639,11 +639,29 @@ class SequentialWorkflow:
 
         for issue in implementation_issues:
             # Extract file path from issue string
-            # Format: "Missing X in src/main.py:15"
-            # or: "Function signature in src/models.py:20 does not match"
-            match = re.search(r'(?:in|at)\s+(\S+\.py)', issue)
-            if match:
-                file_path = match.group(1)
+            # Multiple formats supported:
+            # - "Missing implementation file: src/api.py (specified..."
+            # - "CRITICAL: Missing file src/repository.py specified..."
+            # - "Missing X in src/main.py:15"
+            # - "Function signature in src/models.py:20 does not match"
+
+            # Try multiple patterns to extract .py file paths
+            patterns = [
+                r'(?:in|at)\s+(\S+\.py)',           # "in src/api.py" or "at src/api.py"
+                r':\s+(\S+\.py)',                    # ": src/api.py" or ": Missing src/api.py"
+                r'file\s+(\S+\.py)',                 # "file src/api.py"
+                r'Missing\s+(\S+\.py)',              # "Missing src/api.py"
+                r'\b([a-zA-Z_/][\w/]*\.py)\b'       # any path ending in .py
+            ]
+
+            file_path = None
+            for pattern in patterns:
+                match = re.search(pattern, issue)
+                if match:
+                    file_path = match.group(1)
+                    break
+
+            if file_path:
                 if file_path not in files_map:
                     files_map[file_path] = []
                 files_map[file_path].append(issue)
