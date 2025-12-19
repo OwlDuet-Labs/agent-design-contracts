@@ -139,6 +139,25 @@ WORKSPACE_TOOLS = [
                 }
             }
         }
+    },
+    {
+        "name": "verify_library_compliance",
+        "description": "TOKEN-EFFICIENT library verification using Universal Library Loader. Loads library WITHOUT reading source files (96% token savings). Returns compliance report with function verification, signature checking, and ADC-IMPLEMENTS markers. Use THIS instead of reading all source files for auditing.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "contract_path": {
+                    "type": "string",
+                    "description": "Path to ADC contract file (.qmd) to verify against"
+                },
+                "workspace_path": {
+                    "type": "string",
+                    "description": "Path to implementation workspace (defaults to current workspace)",
+                    "default": "."
+                }
+            },
+            "required": ["contract_path"]
+        }
     }
 ]
 
@@ -296,6 +315,86 @@ class SequentialWorkflow:
         self.contracts_summary = "\n".join(summary_lines)
         return self.contracts_summary
 
+    def _extract_contract_overview(self, contracts_summary: str) -> str:
+        """Extract only contract IDs, names, and 1-sentence descriptions.
+
+        ADC-IMPLEMENTS: <refactor-impl-01> from refactor-evaluator-token-optimization-adc-041
+
+        Evaluator doesn't need full contracts - just enough context to use CLI.
+        This reduces evaluator input from ~40K → ~2K tokens (95% reduction).
+
+        Args:
+            contracts_summary: Full contracts summary from load_contracts_summary()
+
+        Returns:
+            Minimal contract overview with:
+            - Contract ID (from YAML frontmatter)
+            - Contract name (from title or filename)
+            - Brief description (first sentence after frontmatter)
+        """
+        if not contracts_summary:
+            return ""
+
+        overview_lines = ["# Contract Overview (Minimal Context for CLI Testing)\n"]
+
+        # Split by contract file sections (only .qmd/.adc files, not subsections)
+        sections = contracts_summary.split("## ")
+
+        for section in sections[1:]:  # Skip first empty split
+            if not section.strip():
+                continue
+
+            lines = section.split("\n")
+            filename = lines[0].strip()
+
+            # Only process actual contract files (not subsections like "## Overview")
+            if not (filename.endswith(".qmd") or filename.endswith(".adc")):
+                continue
+
+            # Extract contract_id from YAML frontmatter
+            contract_id = "unknown"
+            title = filename
+            description = "No description available"
+
+            in_yaml = False
+            past_yaml = False
+
+            for line in lines[1:]:
+                # Detect YAML frontmatter
+                if line.strip() == "---":
+                    if not in_yaml:
+                        in_yaml = True  # Start of YAML
+                    else:
+                        in_yaml = False  # End of YAML
+                        past_yaml = True
+                    continue
+
+                if in_yaml:
+                    # Parse YAML fields
+                    if line.startswith("contract_id:"):
+                        contract_id = line.split(":", 1)[1].strip()
+                    elif line.startswith("title:"):
+                        title = line.split(":", 1)[1].strip().strip('"')
+                elif past_yaml:
+                    # After YAML, look for first meaningful description line
+                    # Skip empty lines, markdown headers, and section markers
+                    stripped = line.strip()
+                    if stripped and not stripped.startswith("#") and not stripped.startswith("["):
+                        description = stripped
+                        # Take only first sentence (up to period, or 100 chars max)
+                        if "." in description:
+                            description = description.split(".")[0] + "."
+                        if len(description) > 100:
+                            description = description[:97] + "..."
+                        break
+
+            overview_lines.append(f"Contract: {contract_id}")
+            overview_lines.append(f"Name: {title}")
+            overview_lines.append(f"Description: {description}")
+            overview_lines.append("")
+
+        return "\n".join(overview_lines)
+
     def _get_model_id(self, model_name: str) -> str:
         """Map model nickname to full model ID.
 
@@ -401,6 +500,68 @@ class SequentialWorkflow:
                     })
 
                 return json.dumps({"entries": entries})
+
+            elif tool_name == "verify_library_compliance":
+                # ADC-IMPLEMENTS: <ull-integration-01>
+                # Token-efficient library verification using Universal Library Loader
+                try:
+                    from ..library_loader import (
+                        load_library,
+                        ContractInterfaceExtractor,
+                        verify_compliance,
+                    )
+
+                    contract_path = self._resolve_path(tool_input["contract_path"])
+                    workspace_path = self._resolve_path(tool_input.get("workspace_path", "."))
+
+                    if not contract_path.exists():
+                        return json.dumps({"error": f"Contract not found: {contract_path}"})
+
+                    # Extract expected interface from contract
+                    extractor = ContractInterfaceExtractor()
+                    expected = extractor.extract(contract_path)
+
+                    # Load library (token-efficient - NO file reading)
+                    library, metadata = load_library(workspace_path)
+
+                    # Verify compliance
+                    result = verify_compliance(expected, library, metadata, workspace_path)
+
+                    # Format result for JSON
+                    return json.dumps({
+                        "is_compliant": result.is_compliant,
+                        "is_passing": result.is_passing,
+                        "compliance_score": result.compliance_score,
+                        "verification_level": result.verification_level,
+                        "required_functions_found": result.required_functions_found,
+                        "required_functions_missing": result.required_functions_missing,
+                        "signature_mismatches": [
+                            {
+                                "function": m.function_name,
+                                "expected": m.expected_signature,
+                                "found": m.found_signature,
+                                "details": m.mismatch_details,
+                            }
+                            for m in result.signature_mismatches
+                        ],
+                        "adc_implements_markers_found": result.adc_implements_markers_found,
+                        "adc_implements_markers_missing": result.adc_implements_markers_missing,
+                        "warnings": result.warnings,
+                        "errors": result.verification_errors,
+                        "library_metadata": {
+                            "language": metadata.detected_language.value,
+                            "bridge": metadata.bridge_type.value,
+                            "verification_level": metadata.verification_level,
+                            "load_time_ms": metadata.load_time_ms,
+                        },
+                    })
+
+                except Exception as e:
+                    import traceback
+                    return json.dumps({
+                        "error": f"Library verification failed: {e}",
+                        "traceback": traceback.format_exc(),
+                    })
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
@@ -1536,23 +1697,35 @@ Include all required sections for THIS contract only.
 
             # System Evaluator
             print("\n[Evaluator] Running system tests...")
-            evaluator_prompt = f"""Evaluate the implementation against contracts.
 
-Contracts Summary:
-{self.contracts_summary}
+            # ADC-IMPLEMENTS: <refactor-impl-01> from refactor-evaluator-token-optimization-adc-041
+            # Only send contract OVERVIEW to evaluator, not full summary (95% token reduction)
+            contract_overview = self._extract_contract_overview(self.contracts_summary)
+
+            evaluator_prompt = f"""Evaluate system readiness per your role definition (roles/system_evaluator.md).
+
+Contract Overview:
+{contract_overview}
 
 Workspace: {self.workspace}
 
-Requirements:
-1. Run all tests (pytest)
-2. Check performance constraints
-3. Verify feature completeness
+Your Steps (per roles/system_evaluator.md):
+1. Run pytest → if failures, report for auditor review
+2. Check for CLI/MCP interface → if missing, request refiner to add CLI contract
+3. Use CLI/MCP interface (like end-user) to verify functionality
+4. SHORT report (max 500 tokens): tests pass? CLI works? Usage aligns with contract intent?
+
+CRITICAL RULES:
+- Do NOT read implementation files (auditor already validated)
+- Do NOT re-validate contracts (auditor already did this)
+- Use the actual CLI/tool interface only
+- Keep report SHORT and focused on empirical testing
 
 Return result in JSON format:
 {{
   "satisfied": true/false,
   "failures": ["test failure 1", ...],
-  "feedback": "Summary of issues"
+  "feedback": "Brief summary of issues (max 2 sentences)"
 }}
 """
 
