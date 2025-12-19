@@ -503,8 +503,26 @@ class SequentialWorkflow:
 
             elif tool_name == "verify_library_compliance":
                 # ADC-IMPLEMENTS: <ull-integration-01>
+                # ADC-IMPLEMENTS: <ull-eval-impl-02>
                 # Token-efficient library verification using Universal Library Loader
+                # Supports ADC_USE_ULL and ADC_VERBOSE environment variables
                 try:
+                    # Check if ULL should be used (default: enabled)
+                    use_ull = os.environ.get("ADC_USE_ULL", "1") == "1"
+                    verbose = os.environ.get("ADC_VERBOSE", "0") == "1"
+
+                    if verbose:
+                        print(f"[ULL] ADC_USE_ULL={use_ull}, ADC_VERBOSE={verbose}")
+
+                    if not use_ull:
+                        # Legacy mode: Return message indicating ULL is disabled
+                        if verbose:
+                            print("[ULL] Disabled via ADC_USE_ULL=0, agent should use file reading")
+                        return json.dumps({
+                            "error": "ULL disabled via ADC_USE_ULL=0",
+                            "suggestion": "Use file reading tools instead or set ADC_USE_ULL=1"
+                        })
+
                     from ..library_loader import (
                         load_library,
                         ContractInterfaceExtractor,
@@ -514,6 +532,10 @@ class SequentialWorkflow:
                     contract_path = self._resolve_path(tool_input["contract_path"])
                     workspace_path = self._resolve_path(tool_input.get("workspace_path", "."))
 
+                    if verbose:
+                        print(f"[ULL] Contract: {contract_path}")
+                        print(f"[ULL] Workspace: {workspace_path}")
+
                     if not contract_path.exists():
                         return json.dumps({"error": f"Contract not found: {contract_path}"})
 
@@ -521,11 +543,23 @@ class SequentialWorkflow:
                     extractor = ContractInterfaceExtractor()
                     expected = extractor.extract(contract_path)
 
+                    if verbose:
+                        print(f"[ULL] Extracted {len(expected.required_block_ids)} required block IDs")
+
                     # Load library (token-efficient - NO file reading)
                     library, metadata = load_library(workspace_path)
 
+                    if verbose:
+                        print(f"[ULL] Loaded library: {metadata.detected_language.value} via {metadata.bridge_type.value}")
+                        print(f"[ULL] Load time: {metadata.load_time_ms:.1f}ms")
+
                     # Verify compliance
                     result = verify_compliance(expected, library, metadata, workspace_path)
+
+                    if verbose:
+                        print(f"[ULL] Compliance: {result.is_compliant}, Score: {result.compliance_score:.2f}")
+                        print(f"[ULL] Markers found: {len(result.adc_implements_markers_found)}")
+                        print(f"[ULL] Markers missing: {len(result.adc_implements_markers_missing)}")
 
                     # Format result for JSON
                     return json.dumps({
@@ -1699,34 +1733,82 @@ Include all required sections for THIS contract only.
             print("\n[Evaluator] Running system tests...")
 
             # ADC-IMPLEMENTS: <refactor-impl-01> from refactor-evaluator-token-optimization-adc-041
+            # ADC-IMPLEMENTS: <refactor-empirical-testing-01> from refactor-evaluator-empirical-testing-adc-042
             # Only send contract OVERVIEW to evaluator, not full summary (95% token reduction)
             contract_overview = self._extract_contract_overview(self.contracts_summary)
 
-            evaluator_prompt = f"""Evaluate system readiness per your role definition (roles/system_evaluator.md).
+            # Find main contract for ULL verification
+            contracts_dir = self.workspace / "contracts"
+            main_contract = None
+            if contracts_dir.exists():
+                # Try to find main contract (prefer "main.qmd", fallback to first .qmd)
+                main_contract_candidates = list(contracts_dir.glob("main.qmd"))
+                if not main_contract_candidates:
+                    main_contract_candidates = list(contracts_dir.glob("*.qmd"))
+                if main_contract_candidates:
+                    main_contract = str(main_contract_candidates[0].relative_to(self.workspace))
+
+            evaluator_prompt = f"""Evaluate system using EMPIRICAL TESTING ONLY (per roles/system_evaluator.md v3).
 
 Contract Overview:
 {contract_overview}
 
 Workspace: {self.workspace}
 
-Your Steps (per roles/system_evaluator.md):
-1. Run pytest → if failures, report for auditor review
-2. Check for CLI/MCP interface → if missing, request refiner to add CLI contract
-3. Use CLI/MCP interface (like end-user) to verify functionality
-4. SHORT report (max 500 tokens): tests pass? CLI works? Usage aligns with contract intent?
+CRITICAL: Use tools in THIS EXACT SEQUENCE (from roles/system_evaluator.md):
 
-CRITICAL RULES:
-- Do NOT read implementation files (auditor already validated)
-- Do NOT re-validate contracts (auditor already did this)
-- Use the actual CLI/tool interface only
-- Keep report SHORT and focused on empirical testing
+1. BUILD VERIFICATION:
+   Tool: run_bash
+   Command: Check for pyproject.toml/setup.py, then run `pip install -e .`
+   If build fails → Return {{"satisfied": false, "reason": "build_failed", "route": "auditor"}}
 
-Return result in JSON format:
+2. TEST EXECUTION:
+   Tool: run_bash
+   Command: pytest (or pytest -v for detailed output)
+   If ANY tests fail → Return {{"satisfied": false, "reason": "tests_failed", "route": "auditor", "test_output": "<pytest output>"}}
+
+3. ULL COMPLIANCE:
+   Tool: verify_library_compliance
+   Input: contract_path={main_contract or "contracts/main.qmd"}
+   If is_compliant = false → Return {{"satisfied": false, "reason": "ull_compliance_failed", "route": "refiner"}}
+
+4. CLI FUNCTIONALITY:
+   Tool: run_bash
+   Command: Execute basic CLI commands from contract overview
+   If basic operations fail → Return {{"satisfied": false, "reason": "cli_broken", "route": "refiner"}}
+
+5. COLLECT INSIGHTS (does NOT affect satisfied status):
+   Performance observations
+   UX improvements
+   Optimization opportunities
+
+PROHIBITED:
+- Do NOT read source files (auditor already validated)
+- Do NOT make qualitative judgments about code
+- Do NOT fail evaluation for insights/optimizations
+- Do NOT skip pytest execution
+
+REQUIRED JSON RESPONSE FORMAT:
 {{
   "satisfied": true/false,
-  "failures": ["test failure 1", ...],
-  "feedback": "Brief summary of issues (max 2 sentences)"
+  "reason": "build_failed|tests_failed|ull_compliance_failed|cli_broken|all_passed",
+  "route": "auditor|refiner|none",
+  "test_output": "pytest output if tests failed",
+  "ull_result": {{verify_library_compliance result}},
+  "cli_tests": [{{"command": "...", "success": true/false, "output": "..."}}],
+  "insights": {{
+    "performance": ["observation 1", ...],
+    "optimizations": ["opportunity 1", ...],
+    "ux": ["suggestion 1", ...]
+  }}
 }}
+
+DECISION TREE (follow exactly):
+- Build fails → satisfied: false, route: auditor
+- Tests fail → satisfied: false, route: auditor
+- ULL fails → satisfied: false, route: refiner
+- CLI fails → satisfied: false, route: refiner
+- All pass → satisfied: true (even if you have insights)
 """
 
             evaluator_result = self.invoke_agent(
@@ -1744,19 +1826,61 @@ Return result in JSON format:
                 )
 
             # Parse evaluator result with JSON extraction fallback (ADC-040 fix)
+            # ADC-IMPLEMENTS: <refactor-empirical-testing-02> from refactor-evaluator-empirical-testing-adc-042
             eval_data = self._extract_json_from_response(evaluator_result["response"])
 
             if eval_data is not None:
-                # Successfully extracted JSON - handle both formats
-                # Format 1: Direct {"satisfied": true, "feedback": "..."}
-                # Format 2: Nested {"FINAL_VERDICT": {"satisfied": true, ...}}
+                # Successfully extracted JSON - handle multiple formats
+                # Format 1: New empirical testing format (v3)
+                # Format 2: Legacy format with FINAL_VERDICT
+                # Format 3: Direct {"satisfied": true, "feedback": "..."}
                 if "FINAL_VERDICT" in eval_data:
                     verdict = eval_data["FINAL_VERDICT"]
                     satisfied = verdict.get("satisfied", False)
+                    reason = verdict.get("reason", "unknown")
+                    route = verdict.get("route", "none")
                     feedback = verdict.get("summary", verdict.get("feedback", ""))
                 else:
                     satisfied = eval_data.get("satisfied", False)
+                    reason = eval_data.get("reason", "unknown")
+                    route = eval_data.get("route", "none")
                     feedback = eval_data.get("feedback", "")
+
+                # Extract and log insights separately (NOT passed to refiner)
+                insights = eval_data.get("insights", {})
+                if insights:
+                    insights_file = self.workspace / f".evaluator_insights_{state.outer_iteration}.json"
+                    try:
+                        with open(insights_file, "w") as f:
+                            json.dump({
+                                "iteration": state.outer_iteration,
+                                "insights": insights,
+                                "timestamp": datetime.now().isoformat()
+                            }, f, indent=2)
+                        print(f"    [Insights] Logged to {insights_file.name}")
+
+                        # Display insights summary (doesn't affect workflow)
+                        total_insights = sum(len(v) for v in insights.values() if isinstance(v, list))
+                        if total_insights > 0:
+                            print(f"    [Insights] {total_insights} observations logged (not blocking)")
+                    except Exception as e:
+                        print(f"    [Warning] Failed to log insights: {e}")
+
+                # Determine feedback based on route and reason
+                if route == "auditor":
+                    # Build or test failures - use test output if available
+                    test_output = eval_data.get("test_output", "")
+                    if test_output:
+                        feedback = f"Tests failed:\n{test_output[:500]}"  # Truncate to 500 chars
+                    else:
+                        feedback = f"Build or tests failed: {reason}"
+                elif route == "refiner":
+                    # Interface issues - use reason
+                    feedback = f"Interface issue: {reason}"
+                elif not feedback:
+                    # All passed - use reason or default
+                    feedback = reason if reason != "unknown" else "All tests passed"
+
             else:
                 # JSON extraction failed - provide detailed diagnostics
                 print(f"    [Error] Failed to extract JSON from evaluator response")
@@ -1767,6 +1891,8 @@ Return result in JSON format:
                     print(f"    Response preview (last 100 chars):")
                     print(f"    ...{evaluator_result['response'][-100:]}")
                 satisfied = False
+                reason = "json_parse_failed"
+                route = "none"
                 feedback = evaluator_result["response"]
 
             state.evaluator_satisfied = satisfied

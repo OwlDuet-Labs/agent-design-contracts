@@ -18,11 +18,20 @@ from .metadata import LibraryMetadata, LanguageType, BridgeType
 from .detection import detect_language
 from .bridges.python_bridge import PythonBridge
 from .bridges.cli_fallback import CliFallbackBridge
+from .bridges import HAS_RPC
 from .exceptions import LibraryLoadError, InterfaceConformanceError
 from .verification import VerificationResult, SignatureMismatch
 from .contract_extractor import ContractInterfaceExtractor, ExpectedInterface
 from .verifier import verify_compliance
 from .marker_verifier import MarkerVerifier
+
+# Import RPC bridge if available
+if HAS_RPC:
+    from .bridges.rpc_bridge import RPCBridge, RPCError, RPCTimeoutError
+else:
+    RPCBridge = None
+    RPCError = None
+    RPCTimeoutError = None
 
 
 __all__ = [
@@ -38,6 +47,10 @@ __all__ = [
     "MarkerVerifier",
     "LibraryLoadError",
     "InterfaceConformanceError",
+    "RPCBridge",
+    "RPCError",
+    "RPCTimeoutError",
+    "HAS_RPC",
 ]
 
 
@@ -109,10 +122,12 @@ def load_library(
         supports_signature_verification=bridge_type in [
             BridgeType.PYTHON_DIRECT,
             BridgeType.NODEJS_SUBPROCESS,
+            BridgeType.RPC,
         ],
         supports_type_introspection=bridge_type in [
             BridgeType.PYTHON_DIRECT,
             BridgeType.NODEJS_SUBPROCESS,
+            BridgeType.RPC,
         ],
         supports_docstring_verification=bridge_type == BridgeType.PYTHON_DIRECT,
         load_time_ms=load_time_ms,
@@ -132,6 +147,33 @@ def load_library(
     return library_proxy, metadata
 
 
+def _should_use_rpc_bridge(workspace: Path, language: LanguageType) -> bool:
+    """
+    Determine if RPC bridge should be used for this workspace.
+
+    Checks for presence of RPC server entry point based on language.
+
+    Args:
+        workspace: Workspace path
+        language: Detected language
+
+    Returns:
+        True if RPC server is available
+    """
+    # Dart: Check for bin/serve.dart or lib/adc_server.dart
+    if language == LanguageType.DART:
+        if (workspace / "bin" / "serve.dart").exists():
+            return True
+        if (workspace / "lib" / "adc_server.dart").exists():
+            return True
+
+    # Future: Add detection for other languages
+    # TypeScript: Check for dist/rpc-server.js
+    # Go: Check for bin/rpc-server
+
+    return False
+
+
 def _select_bridge(language: LanguageType, workspace: Path) -> Tuple[BridgeType, Any]:
     """
     Select appropriate bridge for language.
@@ -143,6 +185,13 @@ def _select_bridge(language: LanguageType, workspace: Path) -> Tuple[BridgeType,
     Returns:
         (bridge_type, bridge_instance)
     """
+    # Try RPC bridge first if available
+    if HAS_RPC and _should_use_rpc_bridge(workspace, language):
+        if language == LanguageType.DART:
+            command = ["dart", "run", str(workspace / "bin" / "serve.dart")]
+            return BridgeType.RPC, RPCBridge(command, workspace_path=workspace)
+
+    # Fall back to language-specific bridges
     if language == LanguageType.PYTHON:
         return BridgeType.PYTHON_DIRECT, PythonBridge(workspace)
     elif language == LanguageType.NODEJS:

@@ -45,7 +45,12 @@ class PythonBridge:
         pyproject_path = self.workspace_path / "pyproject.toml"
         if pyproject_path.exists():
             try:
-                import tomllib
+                # Python 3.11+ has tomllib built-in, Python 3.10 needs tomli
+                try:
+                    import tomllib
+                except ImportError:
+                    import tomli as tomllib
+
                 with open(pyproject_path, "rb") as f:
                     config = tomllib.load(f)
                     # Try to find package name

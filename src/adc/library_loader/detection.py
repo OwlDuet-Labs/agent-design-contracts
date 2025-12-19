@@ -29,6 +29,10 @@ LANGUAGE_INDICATORS = {
         "yarn.lock",
         "tsconfig.json",
     ],
+    LanguageType.DART: [
+        "pubspec.yaml",
+        "pubspec.lock",
+    ],
     LanguageType.RUST: [
         "Cargo.toml",
         "Cargo.lock",

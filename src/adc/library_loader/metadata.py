@@ -16,6 +16,7 @@ class LanguageType(str, Enum):
     """Detected language types."""
     PYTHON = "python"
     NODEJS = "nodejs"
+    DART = "dart"
     RUST = "rust"
     GO = "go"
     JAVA = "java"
@@ -27,6 +28,7 @@ class BridgeType(str, Enum):
     """Bridge implementation types."""
     PYTHON_DIRECT = "python_direct"
     NODEJS_SUBPROCESS = "nodejs_subprocess"
+    RPC = "rpc"  # MessagePack RPC bridge
     CLI_FALLBACK = "cli_fallback"
     GO_CTYPES = "go_ctypes"  # Phase 2
     RUST_PYO3 = "rust_pyo3"  # Phase 2
@@ -59,7 +61,7 @@ class LibraryMetadata:
     def verification_level(self) -> str:
         """Human-readable verification capability level."""
         if self.supports_signature_verification:
-            return "FULL"  # Python, Node.js, Phase 2 bindings
+            return "FULL"  # Python, Node.js, RPC, Phase 2 bindings
         elif self.bridge_type == BridgeType.CLI_FALLBACK:
             return "LIMITED"  # CLI only, no signature verification
         else:
