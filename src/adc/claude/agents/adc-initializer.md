@@ -86,17 +86,15 @@ For each identified component:
 
 ### Phase 3: Marker Generation
 
-For each contract, add markers to source files:
+For each contract, **invoke `@adc-code-generator` with MARKER-ONLY directive**:
 
 ```
-MARKER-ONLY MODE ENABLED
+CRITICAL: You are operating in MARKER-ONLY MODE.
 
-For each block in the contract:
-1. Find the corresponding code element (class/function)
-2. Add marker comment ABOVE the element definition
-3. Use format: # ADC-IMPLEMENTS: <block_id>
+Your ONLY task is to add ADC-IMPLEMENTS markers to existing code.
 
-PROHIBITED: Creating files, writing code, modifying logic
+DO NOT: Create files, add code, modify logic, refactor
+DO: Read contract blocks, find corresponding code, add marker comments
 ```
 
 ### Phase 4: Final Audit & Verification

@@ -87,16 +87,22 @@ For each identified component:
 
 For each contract:
 
-1. **Add markers to source files**
+1. **Invoke `@adc-code-generator` with MARKER-ONLY directive**
    ```
-   MARKER-ONLY MODE ENABLED
+   CRITICAL: You are operating in MARKER-ONLY MODE.
 
-   For each block in the contract:
-   1. Find the corresponding code element (class/function)
-   2. Add marker comment ABOVE the element definition
-   3. Use format: # ADC-IMPLEMENTS: <block_id>
+   Your ONLY task is to add ADC-IMPLEMENTS markers to existing code.
 
-   PROHIBITED: Creating files, writing code, modifying logic
+   DO NOT:
+   - Create any new files
+   - Add any new code
+   - Modify any existing logic
+   - Refactor or restructure anything
+
+   DO:
+   - Read the contract blocks
+   - Find corresponding code elements in the existing source
+   - Add "# ADC-IMPLEMENTS: <block-id>" comments above them
    ```
 
 2. **Verify markers**
