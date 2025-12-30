@@ -19,6 +19,7 @@ class ADCConfig:
             "audit": "anthropic",
             "refine": "gemini",
             "refactor": "anthropic",
+            "initialize": "anthropic",
         }
     )
     models: Dict[str, str] = field(

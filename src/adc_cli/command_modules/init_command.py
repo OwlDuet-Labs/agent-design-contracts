@@ -1,5 +1,9 @@
 """
 ADC Init Command - Initialize ADC project structure
+
+Supports two modes:
+1. Standard init: Create ADC directory structure for new projects
+2. Existing software init (--existing): Prints instructions to use @adc-initializer agent
 """
 
 import shutil
@@ -25,23 +29,30 @@ def add_init_parser(subparsers):
         action="store_true",
         help="Overwrite existing directories and files"
     )
+    init_parser.add_argument(
+        "--existing",
+        action="store_true",
+        help="Initialize ADC for existing software (creates structure and shows agent instructions)"
+    )
 
 
-def init_command(path: str = ".", force: bool = False) -> bool:
+def init_command(path: str = ".", force: bool = False, existing: bool = False) -> bool:
     """
     Initialize ADC project structure.
-    
+
     Creates the standard ADC directory structure and .gitignore file.
-    
+    For existing software, also prints instructions for the @adc-initializer agent.
+
     Args:
         path: Project root path
         force: Overwrite existing directories
-        
+        existing: If True, initialize for existing software
+
     Returns:
         True if successful, False otherwise
     """
     project_root = Path(path).resolve()
-    
+
     logger.info(f"Initializing ADC project structure in: {project_root}")
     
     # Define directory structure
@@ -52,6 +63,7 @@ def init_command(path: str = ".", force: bool = False) -> bool:
         "adc_files/evaluation",
         "adc_files/implementation",
         "adc_files/releases",
+        "adc_files/initialization",
         "claude_tmp/scratch",
         "claude_tmp/debug",
         "claude_tmp/temp_outputs",
@@ -156,12 +168,12 @@ See the ADC schema for complete documentation.
     print("\n" + "=" * 60)
     print("ADC Project Initialization Complete")
     print("=" * 60)
-    
+
     if created_dirs:
         print(f"\n✅ Created {len(created_dirs)} directories:")
         for dir_path in created_dirs:
             print(f"   - {dir_path}")
-    
+
     if skipped_dirs:
         print(f"\n⏭️  Skipped {len(skipped_dirs)} existing directories:")
         for dir_path in skipped_dirs[:5]:  # Show first 5
@@ -169,18 +181,36 @@ See the ADC schema for complete documentation.
         if len(skipped_dirs) > 5:
             print(f"   ... and {len(skipped_dirs) - 5} more")
         print(f"\n   Use --force to overwrite existing directories")
-    
+
     if gitignore_created:
         print(f"\n✅ Created .gitignore")
     elif gitignore_updated:
         print(f"\n✅ Updated .gitignore with ADC patterns")
-    
+
     print(f"\n📁 Project root: {project_root}")
-    print(f"\n📚 Next steps:")
-    print(f"   1. Create your first contract in contracts/")
-    print(f"   2. Run 'adc-setup' to install Claude Code integration")
-    print(f"   3. Use '@adc-contract-writer' to create contracts")
-    print(f"   4. See the schema: cat ~/.claude/schema/adc-schema.qmd")
+
+    if existing:
+        # Show instructions for existing software initialization
+        print(f"\n" + "=" * 60)
+        print("Existing Software Initialization")
+        print("=" * 60)
+        print(f"\n📚 Next steps for existing codebase:")
+        print(f"   1. Open this project in an IDE with Claude Code")
+        print(f"   2. Run: @agent-adc-initializer Initialize this codebase")
+        print(f"   3. The agent will:")
+        print(f"      - Analyze your codebase structure")
+        print(f"      - Create contracts documenting existing code")
+        print(f"      - Add ADC-IMPLEMENTS markers (comments only)")
+        print(f"      - Generate an initialization report")
+        print(f"\n⚠️  Note: The initializer only adds comment markers.")
+        print(f"   Your functional code will NOT be modified.")
+    else:
+        print(f"\n📚 Next steps:")
+        print(f"   1. Create your first contract in contracts/")
+        print(f"   2. Run 'adc-setup' to install Claude Code integration")
+        print(f"   3. Use '@adc-contract-writer' to create contracts")
+        print(f"   4. See the schema: cat ~/.claude/schema/adc-schema.qmd")
+
     print("=" * 60)
-    
+
     return True
