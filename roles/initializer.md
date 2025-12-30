@@ -106,27 +106,33 @@ For each contract:
 
 ### Phase 4: Final Audit & Verification
 
-1. **Invoke `@adc-compliance-auditor` with verification directive**
+1. **Invoke `@adc-compliance-auditor`**
+
+   Request a full compliance audit with additional emphasis on initialization verification:
    ```
-   CRITICAL: This is a MARKER-VERIFICATION audit.
+   Perform a full ADC compliance audit with these additional checks:
 
-   Your tasks:
+   INITIALIZATION-SPECIFIC VERIFICATION:
    1. Verify all contract blocks have ADC-IMPLEMENTS markers in code
-   2. Verify NO functional code was changed (markers only)
-   3. Report any missing markers
-   4. Report any unauthorized code modifications
+   2. Verify NO functional code was changed (markers only - comments added)
+   3. Report any missing markers as gaps to address
+   4. Report any unauthorized code modifications as CRITICAL VIOLATION
 
-   If unauthorized modifications found: Report as CRITICAL VIOLATION
+   Run the complete audit including:
+   - Parity Check (markers ↔ contracts)
+   - Design Drift Analysis (contracts accurately describe existing code)
+   - Architectural Analysis (identify issues in existing codebase)
    ```
 
 2. **Loop if incomplete**
    - If markers missing: Re-run marker generation for specific files
-   - If code modified: **ABORT** - this is a critical violation
+   - If code modified beyond markers: **ABORT** - this is a critical violation
 
 3. **Generate final report**
    - Contract inventory
    - Marker coverage statistics
    - Design block count with regeneration note
+   - Audit findings summary
    - Files modified (should only show marker additions)
    - Recommendations for next steps
 

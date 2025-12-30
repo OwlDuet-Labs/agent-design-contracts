@@ -101,9 +101,13 @@ PROHIBITED: Creating files, writing code, modifying logic
 
 ### Phase 4: Final Audit & Verification
 
-1. Verify all contract blocks have ADC-IMPLEMENTS markers in code
-2. Verify NO functional code was changed (markers only)
-3. Generate final report with design block count
+1. **Invoke `@adc-compliance-auditor`** for a full audit with initialization emphasis:
+   - Parity Check (markers ↔ contracts)
+   - Design Drift Analysis (contracts accurately describe existing code)
+   - Architectural Analysis (identify issues in existing codebase)
+   - CRITICAL: Verify NO functional code was changed (markers only)
+2. Address any missing markers identified by audit
+3. Generate final report with design block count and audit summary
 
 ## Marker Format Specification
 
