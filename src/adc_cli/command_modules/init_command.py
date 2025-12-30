@@ -3,14 +3,28 @@ ADC Init Command - Initialize ADC project structure
 
 Supports two modes:
 1. Standard init: Create ADC directory structure for new projects
-2. Existing software init (--existing): Prints instructions to use @adc-initializer agent
+2. Existing software init (--existing): Creates contracts and markers via @adc-initializer
 """
 
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Optional
 
 from ..logging_config import logger
+
+
+def prompt_yes_no(question: str, default: bool = True) -> bool:
+    """Prompt user for yes/no answer."""
+    suffix = " [Y/n]: " if default else " [y/N]: "
+    try:
+        answer = input(question + suffix).strip().lower()
+        if not answer:
+            return default
+        return answer in ('y', 'yes')
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
 
 
 def add_init_parser(subparsers):
@@ -190,20 +204,38 @@ See the ADC schema for complete documentation.
     print(f"\n📁 Project root: {project_root}")
 
     if existing:
-        # Show instructions for existing software initialization
+        # Prompt user to run the initializer agent
         print(f"\n" + "=" * 60)
         print("Existing Software Initialization")
         print("=" * 60)
-        print(f"\n📚 Next steps for existing codebase:")
-        print(f"   1. Open this project in an IDE with Claude Code")
-        print(f"   2. Run: @agent-adc-initializer Initialize this codebase")
-        print(f"   3. The agent will:")
-        print(f"      - Analyze your codebase structure")
-        print(f"      - Create contracts documenting existing code")
-        print(f"      - Add ADC-IMPLEMENTS markers (comments only)")
-        print(f"      - Generate an initialization report")
-        print(f"\n⚠️  Note: The initializer only adds comment markers.")
-        print(f"   Your functional code will NOT be modified.")
+        print(f"\nThe @adc-initializer agent will:")
+        print(f"   - Analyze your codebase structure")
+        print(f"   - Create contracts documenting existing code")
+        print(f"   - Add ADC-IMPLEMENTS markers (comments only)")
+        print(f"   - Generate an initialization report")
+        print(f"\n⚠️  Note: Only comment markers are added. Functional code is NOT modified.")
+
+        if prompt_yes_no("\nWould you like to initialize this project with contracts based on your codebase?"):
+            print(f"\n🚀 Launching ADC Initializer agent...")
+            print("=" * 60 + "\n")
+
+            # Run claude with the initializer prompt
+            try:
+                subprocess.run(
+                    ["claude", "-p", "@adc-initializer Initialize this codebase"],
+                    cwd=str(project_root),
+                    check=False  # Don't raise on non-zero exit
+                )
+            except FileNotFoundError:
+                print("\n❌ Error: 'claude' command not found.")
+                print("   Please ensure Claude Code CLI is installed and in your PATH.")
+                print(f"\n   Manual alternative:")
+                print(f"   1. Open this project in an IDE with Claude Code")
+                print(f"   2. Run: @adc-initializer Initialize this codebase")
+                return False
+        else:
+            print(f"\n📝 Initialization skipped. To run later:")
+            print(f"   claude -p \"@adc-initializer Initialize this codebase\"")
     else:
         print(f"\n📚 Next steps:")
         print(f"   1. Create your first contract in contracts/")
