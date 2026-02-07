@@ -1,0 +1,103 @@
+---
+contract_id: simple-math-dart
+title: "Simple Math Library (Dart)"
+author: "ADC Test Fixtures"
+status: "active"
+version: 1.0
+created_date: "2025-12-18"
+last_updated: "2025-12-18"
+---
+
+## [Overview] <simple-math-dart-overview>
+
+Simple math library for testing ADC MessagePack RPC bridge with Dart.
+
+**Purpose:** Test fixture demonstrating cross-language RPC communication.
+
+**Language:** Dart 3.0+
+
+**Dependencies:**
+- `msgpack_dart: ^2.0.0`
+
+---
+
+## [Feature: Add Operation] <simple-math-dart::add>
+
+**Signature:**
+```dart
+static int add(int a, int b)
+```
+
+**Behavior:**
+- Accepts two integers
+- Returns their sum
+
+**Example:**
+```dart
+SimpleMath.add(5, 3)  // Returns: 8
+```
+
+---
+
+## [Feature: Multiply Operation] <simple-math-dart::multiply>
+
+**Signature:**
+```dart
+static int multiply(int a, int b)
+```
+
+**Behavior:**
+- Accepts two integers
+- Returns their product
+
+**Example:**
+```dart
+SimpleMath.multiply(4, 7)  // Returns: 28
+```
+
+---
+
+## [Feature: Divide Operation] <simple-math-dart::divide>
+
+**Signature:**
+```dart
+static double divide(int a, int b)
+```
+
+**Behavior:**
+- Accepts two integers
+- Returns their quotient as double
+- Throws `ArgumentError` if b is zero
+
+**Example:**
+```dart
+SimpleMath.divide(10, 2)  // Returns: 5.0
+SimpleMath.divide(10, 0)  // Throws: ArgumentError
+```
+
+---
+
+## [Parity: Implementation Files]
+
+```
+tests/library_loader/fixtures/dart_simple_math/
+  - pubspec.yaml: Package configuration
+  - lib/simple_math.dart: Math operations with ADC markers
+  - lib/adc_server.dart: MessagePack RPC server implementation
+  - bin/serve.dart: RPC server entry point
+```
+
+---
+
+## [Validation: Testing]
+
+**RPC Protocol Tests:**
+- Test MessagePack serialization/deserialization
+- Test error propagation from Dart to Python
+- Test method invocation via RPC bridge
+- Verify performance overhead <10ms per call
+
+**Marker Verification:**
+- ADC-IMPLEMENTS markers present in all methods
+- Markers reference correct contract IDs
+- Markers found by MarkerVerifier

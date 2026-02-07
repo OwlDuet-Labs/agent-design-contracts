@@ -18,6 +18,24 @@ Your primary task is to audit codebases against their ADC design specifications 
 
 1. **Parity Check Phase:**
    - Scan all code for `ADC-IMPLEMENTS` and `ADC-USES-PROMPT` markers
+   - **RECOMMENDED: Use Universal Library Loader (ULL) MarkerVerifier for token-efficient marker detection:**
+     ```python
+     from adc.library_loader import MarkerVerifier
+
+     # Token-efficient marker verification (99.2% reduction: ~500 tokens instead of 40,000+)
+     verifier = MarkerVerifier(workspace_path)
+     found_markers = verifier.find_markers()  # Returns Set[str] of marker IDs
+
+     # Example: Verify coverage against contract
+     required_block_ids = set(extract_block_ids_from_contract(contract_file))
+     is_complete, missing = verifier.verify_coverage(required_block_ids, found_markers)
+
+     if not is_complete:
+         print(f"Missing implementations: {missing}")
+     ```
+   - **Location:** ULL infrastructure at `/Volumes/X10/owl/adc/adc-labs/src/adc/library_loader/`
+   - **Benefit:** Uses ripgrep/grep to find markers without reading all file contents
+   - **Fallback:** If ULL unavailable, fall back to reading files individually with regex
    - Verify each marker ID corresponds to a valid design block in the contracts
    - Identify and report any "dangling markers" (markers pointing to non-existent IDs)
    - Ensure every design block (except `Rationale` blocks) has at least one implementation marker

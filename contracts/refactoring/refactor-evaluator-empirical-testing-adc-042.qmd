@@ -1,0 +1,421 @@
+---
+contract_id: refactor-evaluator-empirical-testing-adc-042
+title: "Temporary Refactor: System Evaluator Empirical Testing Focus"
+author: "ADC Refactorer Agent"
+type: refactor
+status: active
+target_contracts:
+  - "adc-sequential-workflow-001"
+created_date: "2025-12-19"
+completion_criteria:
+  - "system_evaluator.md updated with empirical testing requirements"
+  - "sequential_workflow.py evaluator invocation updated"
+  - "Evaluator uses ONLY build/test/ULL/CLI interfaces"
+  - "No source file reading for qualitative judgments"
+  - "Clear separation: insights vs. refinement issues"
+  - "Token waste eliminated (no unnecessary refiner loops)"
+---
+
+## [Rationale: Why This Refactoring] <refactor-rationale-01>
+
+**Problem:** The system-evaluator is causing massive token waste ($81.44 vs $0.53 estimated = 1000x overrun):
+- Reading source files directly and making qualitative judgments
+- Returning "Satisfied: False" even when compliance is 95% (above 80% threshold)
+- NOT actually running tests or using the system's CLI/MCP interfaces
+- Triggering unnecessary refiner loops for minor issues that should be logged as insights
+
+**Root Cause:**
+1. Role definition emphasizes "behavioral analysis" but lacks clear tool usage requirements
+2. Workflow invocation doesn't provide clear interface specifications
+3. No separation between "test failures" (pass to auditor) vs "optimization opportunities" (log as insights)
+4. Evaluator re-validates implementation instead of focusing on runtime testing
+
+**Solution:** Transform evaluator into a strictly empirical testing agent:
+1. MUST use `run_bash` tool to execute pytest
+2. MUST use `verify_library_compliance` tool for ULL verification
+3. MUST use CLI/MCP interfaces for functionality testing
+4. NO reading source files directly
+5. Clear decision tree: build fails → auditor, tests fail → auditor, ULL/CLI interface broken → refiner, performance insights → log separately
+
+**Impact:**
+- 95%+ token reduction (no source file reading)
+- Eliminate false negatives (tests passing = satisfied)
+- Clear failure routing (implementation vs. interface vs. insights)
+- Predictable evaluation costs
+
+---
+
+## [TargetContracts: Components to Update] <refactor-targets-01>
+
+### Component 1: system_evaluator.md (Role Definition)
+**Current State:**
+- Emphasizes "behavioral analysis" and "performance testing"
+- No explicit tool usage requirements
+- Ambiguous about when to report issues vs. log insights
+- "Start With Failure Assumptions" creates false negatives
+
+**Required Changes:**
+1. Add "CRITICAL TOOL USAGE REQUIREMENTS" section at top
+2. Define clear decision tree for routing issues
+3. Specify output format with separate sections for insights
+4. Remove "failure assumptions" language that causes false negatives
+5. Add examples of empirical testing workflow
+
+**Updated Sections:**
+- Add `## [CRITICAL TOOL USAGE REQUIREMENTS]` section before existing content
+- Update `## [OUTPUT]` section to include separate insights section
+- Update `## [RULES FOR SYSTEM EVALUATION]` to emphasize tool-first approach
+- Add `## [DECISION TREE]` section for routing issues
+- Update `## [Example Evaluation Process]` with tool usage examples
+
+### Component 2: sequential_workflow.py (Evaluator Invocation)
+**Current State:**
+- Lines 1732-1764: Evaluator prompt provides contract overview
+- Expects JSON response with satisfied/failures/feedback
+- No clear interface specifications provided
+- No guidance on when to use which tools
+
+**Required Changes:**
+1. Provide clear build/test command guidance in prompt
+2. Specify expected tool usage sequence
+3. Update JSON response schema to include insights section
+4. Add decision tree guidance in prompt
+5. Handle new response format with separated insights
+
+**Updated Sections:**
+- Lines 1732-1764: evaluator_prompt construction
+- Lines 1780-1805: response parsing to handle insights
+- Add new method `_extract_evaluator_insights()` to parse insights separately
+
+---
+
+## [RefactoringTasks: Phased Implementation] <refactor-tasks-01>
+
+### Phase 1: Update Role Definition (system_evaluator.md)
+
+**Task 1.1: Add CRITICAL TOOL USAGE REQUIREMENTS section**
+```markdown
+### CRITICAL TOOL USAGE REQUIREMENTS
+
+You MUST use these tools in this sequence for EVERY evaluation:
+
+1. **Build Verification** (MUST DO FIRST)
+   - Tool: `run_bash`
+   - Command: Check for setup.py/pyproject.toml, run `pip install -e .` or equivalent
+   - Success: Build artifacts exist, no errors
+   - Failure: Return "Satisfied: False" with reason "build_failed" → Pass to AUDITOR
+
+2. **Test Execution** (MUST DO SECOND)
+   - Tool: `run_bash`
+   - Command: `pytest` (or test command from contract)
+   - Success: 100% tests pass
+   - Failure: Return "Satisfied: False" with reason "tests_failed" → Pass to AUDITOR
+
+3. **ULL Compliance** (MUST DO THIRD)
+   - Tool: `verify_library_compliance`
+   - Input: Contract path from overview
+   - Success: is_compliant = true
+   - Failure: Return "Satisfied: False" with reason "ull_compliance_failed" → Pass to REFINER (interface issue)
+
+4. **CLI Functionality** (MUST DO FOURTH)
+   - Tool: `run_bash`
+   - Command: Execute basic CLI commands from contract interface
+   - Success: Commands work, output matches expectations
+   - Failure: Return "Satisfied: False" with reason "cli_broken" → Pass to REFINER (interface issue)
+
+5. **Insights Collection** (DO LAST, SEPARATE FROM COMPLIANCE)
+   - Observations about performance, UX, optimization opportunities
+   - These go in "insights" section, NOT in "feedback"
+   - Do NOT fail evaluation based on insights
+```
+
+**Task 1.2: Update OUTPUT section**
+```markdown
+**OUTPUT:**
+1. **Build/Test Results** - Pass/fail status from pytest
+2. **ULL Verification Results** - Compliance status from verify_library_compliance
+3. **CLI Functionality Results** - Basic operations work correctly
+4. **Insights** (separate section, NOT passed to refiner):
+   - Performance observations
+   - Optimization opportunities
+   - User experience suggestions
+5. **Verdict** - Satisfied: true/false based ONLY on build/test/ULL/CLI status
+```
+
+**Task 1.3: Add DECISION TREE section**
+```markdown
+## DECISION TREE: When to Return Satisfied: False
+
+Follow this decision tree EXACTLY:
+
+1. **Build fails** → Satisfied: False, reason: "build_failed", route: AUDITOR
+2. **Tests fail (ANY test failure)** → Satisfied: False, reason: "tests_failed", route: AUDITOR
+3. **ULL compliance fails** → Satisfied: False, reason: "ull_compliance_failed", route: REFINER
+4. **CLI basic functionality broken** → Satisfied: False, reason: "cli_broken", route: REFINER
+5. **All above pass BUT you have performance/UX insights** → Satisfied: True, include insights in separate section
+6. **All above pass, no insights** → Satisfied: True
+
+NEVER return Satisfied: False for:
+- Performance concerns (log as insight)
+- Missing advanced features (log as insight)
+- Code quality observations (auditor's job)
+- Optimization opportunities (log as insight)
+```
+
+**Task 1.4: Remove false-negative-inducing content**
+Remove or soften these sections:
+- "Start With Failure Assumptions" (line 26-31) - Replace with "Start With Empirical Testing"
+- "Mandatory Failure Section" (line 87-92) - Replace with "Results Section"
+- "Success Through Failure Discovery" (line 80-85) - Remove entirely
+
+### Phase 2: Update Workflow Invocation (sequential_workflow.py)
+
+**Task 2.1: Update evaluator_prompt (lines 1732-1764)**
+```python
+evaluator_prompt = f"""Evaluate system readiness using EMPIRICAL TESTING ONLY.
+
+Contract Overview:
+{contract_overview}
+
+Workspace: {self.workspace}
+
+CRITICAL: Use tools in THIS EXACT SEQUENCE:
+
+1. BUILD VERIFICATION:
+   - run_bash: Check for pyproject.toml/setup.py
+   - run_bash: pip install -e .
+   - If build fails → Return {{"satisfied": false, "reason": "build_failed", "route": "auditor"}}
+
+2. TEST EXECUTION:
+   - run_bash: pytest
+   - If ANY tests fail → Return {{"satisfied": false, "reason": "tests_failed", "route": "auditor", "test_output": "..."}}
+
+3. ULL COMPLIANCE:
+   - verify_library_compliance: contract_path=contracts/main.qmd (or appropriate contract)
+   - If is_compliant = false → Return {{"satisfied": false, "reason": "ull_compliance_failed", "route": "refiner"}}
+
+4. CLI FUNCTIONALITY:
+   - run_bash: Execute basic CLI commands from contract interface
+   - If basic operations fail → Return {{"satisfied": false, "reason": "cli_broken", "route": "refiner"}}
+
+5. COLLECT INSIGHTS (does NOT affect satisfied status):
+   - Performance observations
+   - UX improvements
+   - Optimization opportunities
+
+PROHIBITED:
+- Do NOT read source files (auditor already validated)
+- Do NOT make qualitative judgments about code
+- Do NOT fail evaluation for insights/optimizations
+
+Return JSON:
+{{
+  "satisfied": true/false,
+  "reason": "build_failed|tests_failed|ull_compliance_failed|cli_broken|all_passed",
+  "route": "auditor|refiner|none",
+  "test_output": "pytest output if tests failed",
+  "ull_result": {{ull verification result}},
+  "cli_tests": [{{"command": "...", "success": true/false, "output": "..."}}],
+  "insights": {{
+    "performance": ["observation 1", ...],
+    "optimizations": ["opportunity 1", ...],
+    "ux": ["suggestion 1", ...]
+  }}
+}}
+"""
+```
+
+**Task 2.2: Update response parsing (lines 1780-1805)**
+```python
+# Parse evaluator result
+eval_data = self._extract_json_from_response(evaluator_result["response"])
+
+if eval_data is not None:
+    satisfied = eval_data.get("satisfied", False)
+    reason = eval_data.get("reason", "unknown")
+    route = eval_data.get("route", "none")
+
+    # Extract insights (separate from compliance issues)
+    insights = eval_data.get("insights", {})
+
+    # Log insights separately (NOT passed to refiner)
+    if insights:
+        insights_file = self.workspace / f".evaluator_insights_{state.outer_iteration}.json"
+        with open(insights_file, "w") as f:
+            json.dump(insights, f, indent=2)
+        print(f"    [Insights] Logged to {insights_file.name}")
+
+    # Determine feedback based on route
+    if route == "auditor":
+        feedback = eval_data.get("test_output", "Build or tests failed")
+    elif route == "refiner":
+        feedback = eval_data.get("reason", "Interface issues detected")
+    else:
+        feedback = "All tests passed"
+else:
+    # Fallback
+    satisfied = False
+    feedback = evaluator_result["response"]
+```
+
+### Phase 3: Add Supporting Methods
+
+**Task 3.1: Add insights extraction method**
+```python
+def _extract_evaluator_insights(self, eval_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract insights section from evaluator response.
+
+    Insights are observations that don't block satisfaction:
+    - Performance metrics
+    - Optimization opportunities
+    - UX improvements
+
+    These are logged separately, NOT passed to refiner.
+    """
+    return eval_data.get("insights", {
+        "performance": [],
+        "optimizations": [],
+        "ux": []
+    })
+```
+
+### Phase 4: Documentation & Testing
+
+**Task 4.1: Update workflow contract**
+Update `contracts/adc-sequential-workflow-001.qmd` to document:
+- Evaluator's empirical testing responsibilities
+- Decision tree for routing issues
+- Insights logging mechanism
+- Expected token reduction (95%+)
+
+**Task 4.2: Create test case**
+Create `tests/test_evaluator_empirical.py`:
+- Test build failure routing to auditor
+- Test test failure routing to auditor
+- Test ULL failure routing to refiner
+- Test CLI failure routing to refiner
+- Test insights don't affect satisfaction
+- Test token usage is <5% of previous evaluator calls
+
+---
+
+## [TestStrategy: Verification Approach] <refactor-test-strategy-01>
+
+**Baseline Tests:**
+- `tests/test_evaluator_ull_integration.py` - Existing ULL integration (must continue to pass)
+- No existing tests for evaluator decision tree
+
+**New Tests Required:**
+- Test evaluator routes build failures to auditor
+- Test evaluator routes test failures to auditor
+- Test evaluator routes ULL failures to refiner
+- Test evaluator routes CLI failures to refiner
+- Test evaluator logs insights without failing
+- Test evaluator uses <5% tokens vs. previous implementation
+
+**Regression Prevention:**
+- All existing workflow tests must pass
+- Token usage must be <10K tokens per evaluation (vs. ~200K before)
+- False negative rate must be 0% (tests pass → satisfied: true)
+
+**Parity:**
+- **Implementation Scope:** `src/adc/roles/system_evaluator.md`, `src/adc/workflows/sequential_workflow.py`
+- **Tests:**
+  - `tests/test_evaluator_ull_integration.py` - Existing ULL integration
+  - `tests/test_evaluator_empirical.py` - New empirical testing verification
+
+---
+
+## [SuccessCriteria: Completion Conditions] <refactor-success-01>
+
+The refactoring is complete when:
+1. ✅ system_evaluator.md updated with CRITICAL TOOL USAGE REQUIREMENTS section
+2. ✅ system_evaluator.md includes DECISION TREE section
+3. ✅ system_evaluator.md OUTPUT section includes separate insights
+4. ✅ sequential_workflow.py evaluator_prompt uses new tool sequence
+5. ✅ sequential_workflow.py response parsing handles insights separately
+6. ✅ All existing tests pass (zero regression)
+7. ✅ Evaluator token usage <10K per invocation (measured empirically)
+8. ✅ False negative rate = 0% (tests pass → satisfied: true)
+9. ✅ Auditor confirms: "This contract is COMPLETE, I recommend it be DELETED"
+
+**Completion Report Format:**
+```
+Status: [COMPLETE / INCOMPLETE]
+Target Contracts: [✅ adc-sequential-workflow-001 updated]
+Tests: [✅ passing / ❌ failing]
+Token Usage: [Measured: X tokens, Target: <10K]
+False Negatives: [Count: 0]
+Recommendation: [DELETE / CONTINUE]
+Blockers: [List if incomplete]
+```
+
+---
+
+## [Implementation Notes] <refactor-notes-01>
+
+**Key Design Decisions:**
+
+1. **Why separate insights from feedback?**
+   - Prevents refiner loops for non-blocking observations
+   - Allows evaluator to provide value without triggering rework
+   - Insights can be reviewed later without affecting workflow
+
+2. **Why route to auditor vs. refiner?**
+   - Build/test failures = implementation quality issues (auditor's domain)
+   - ULL/CLI failures = interface specification issues (refiner's domain)
+   - This routing prevents ping-pong between agents
+
+3. **Why prohibit source file reading?**
+   - Auditor already validated implementation compliance
+   - Reading source wastes tokens without adding value
+   - Evaluator's job is runtime testing, not code review
+
+4. **Why require 100% test pass rate?**
+   - Any test failure indicates implementation issue
+   - Simplifies decision tree (no threshold judgment)
+   - Aligns with CI/CD best practices
+
+**Migration Path:**
+
+This is a backward-compatible change:
+- Existing evaluator calls will work (JSON response format is superset)
+- Insights section is optional (defaults to empty)
+- Route field is optional (defaults to inferring from reason)
+- Can deploy incrementally across different workflows
+
+**Rollback Plan:**
+
+If refactoring causes issues:
+1. Revert system_evaluator.md to original version
+2. Revert sequential_workflow.py lines 1732-1805
+3. Keep insights logging mechanism (useful debugging)
+4. Delete this refactor contract
+
+---
+
+## [Metrics: Success Measurement] <refactor-metrics-01>
+
+**Before Refactoring:**
+- Evaluator token usage: ~200K tokens per invocation
+- False negative rate: ~50% (returns Satisfied: False when tests pass)
+- Evaluation cost: $81.44 (actual) vs $0.53 (estimated)
+- Cost overrun: 1000x
+
+**After Refactoring (Target):**
+- Evaluator token usage: <10K tokens per invocation (95% reduction)
+- False negative rate: 0% (tests pass → Satisfied: True)
+- Evaluation cost: <$1.00 per evaluation
+- Cost overrun: <2x (acceptable variance)
+
+**Measurement Approach:**
+1. Run 10 test evaluations with passing tests
+2. Measure average token usage per evaluation
+3. Count false negatives (Satisfied: False when tests pass)
+4. Calculate cost per evaluation
+5. Compare to targets above
+
+**Success Threshold:**
+- Token usage: <20K (allows 2x target, still 90% reduction)
+- False negatives: 0 (strict requirement)
+- Cost: <$2.00 (allows 2x target, still 40x improvement)

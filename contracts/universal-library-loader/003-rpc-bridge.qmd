@@ -1,0 +1,522 @@
+---
+contract_id: universal-library-loader-adc-003
+title: "MessagePack RPC Bridge for Cross-Language Communication"
+author: "ADC System Architect"
+status: "proposed"
+version: 1.0
+created_date: "2025-12-18"
+last_updated: "2025-12-18"
+---
+
+## [Rationale: Need for RPC Bridge] <rpc-rationale-01>
+
+The Universal Library Loader currently supports two bridge types:
+1. **Python Direct Import**: Full introspection via `importlib` + `inspect`
+2. **CLI Fallback**: Limited verification for compiled languages
+
+Neither approach is optimal for modern cross-language scenarios:
+
+**CLI Fallback Limitations:**
+- Cannot verify function signatures or types
+- No bi-directional communication (single request/response only)
+- Cannot maintain state between calls
+- Inefficient for multiple operations
+
+**Need:** A third bridge type that enables:
+- Full signature introspection for ANY language
+- Efficient bi-directional communication
+- Type-safe method invocation
+- Minimal serialization overhead
+
+**Solution:** MessagePack RPC Bridge using length-prefixed binary protocol.
+
+---
+
+## [Design: Wire Protocol] <rpc-design-01>
+
+**Protocol Specification:**
+
+Binary length-prefixed MessagePack format for stdio communication:
+
+```
+Request Format:
+[4-byte big-endian length][msgpack payload: {"c": "method_name", "a": {...args}}]
+
+Response Format (success):
+[4-byte big-endian length][msgpack payload: {"r": result_value}]
+
+Response Format (error):
+[4-byte big-endian length][msgpack payload: {"e": "error message"}]
+```
+
+**Example Request:**
+```python
+request = msgpack.packb({"c": "add", "a": {"x": 5, "y": 3}})
+length = struct.pack('>I', len(request))  # Big-endian uint32
+# Send: length + request to subprocess stdin
+```
+
+**Example Response (success):**
+```python
+# Receive 4 bytes for length
+length_bytes = subprocess.stdout.read(4)
+length = struct.unpack('>I', length_bytes)[0]
+
+# Receive response payload
+response_bytes = subprocess.stdout.read(length)
+response = msgpack.unpackb(response_bytes)
+# response = {"r": 8}
+```
+
+**Example Response (error):**
+```python
+# response = {"e": "TypeError: add() missing required argument 'y'"}
+```
+
+**Why MessagePack?**
+- 10x faster than JSON serialization
+- Smaller payload size (binary vs text)
+- Native support in 50+ languages
+- Type preservation (integers, floats, bytes, etc.)
+
+**Why Length-Prefixed?**
+- Enables streaming protocol (no end-of-message delimiter needed)
+- Prevents buffering issues with stdio
+- Standard practice for binary protocols
+
+---
+
+## [Feature: RPCBridge Class] <rpc-feature-01>
+
+**Responsibility:** Launch subprocess RPC server and manage bidirectional MessagePack communication.
+
+**Interface:**
+
+```python
+class RPCBridge:
+    def __init__(self, command: List[str]) -> None:
+        """
+        Launch subprocess RPC server with stdio communication.
+
+        Args:
+            command: Command to start RPC server (e.g., ["dart", "run", "bin/serve.dart"])
+
+        Raises:
+            LibraryLoadError: If subprocess fails to start
+        """
+
+    def call(self, method: str, **kwargs) -> Any:
+        """
+        Send RPC request and wait for response.
+
+        Args:
+            method: Method name to call on remote server
+            **kwargs: Method arguments as keyword parameters
+
+        Returns:
+            Deserialized result from remote method
+
+        Raises:
+            RPCError: If remote method raises exception
+            RPCTimeoutError: If response not received within timeout
+        """
+
+    def close(self) -> None:
+        """Terminate subprocess and cleanup resources."""
+
+    def __enter__(self) -> "RPCBridge":
+        """Context manager support."""
+
+    def __exit__(self, *args) -> None:
+        """Cleanup on context exit."""
+```
+
+**Implementation Requirements:**
+
+1. **Process Management:**
+   - Launch subprocess with `stdin=PIPE, stdout=PIPE, stderr=PIPE`
+   - Capture stderr for debugging (don't mix with RPC protocol)
+   - Proper cleanup on close/exit
+
+2. **Wire Protocol:**
+   - Use `struct.pack('>I', length)` for 4-byte big-endian length header
+   - Use `msgpack.packb()` / `msgpack.unpackb()` for serialization
+   - Flush stdin after each write to prevent buffering
+
+3. **Error Handling:**
+   - Distinguish between network errors and application errors
+   - Parse `{"e": "..."}` responses as RPCError exceptions
+   - Handle subprocess termination gracefully
+
+4. **Fail-Not-Fallback:**
+   - NO default values that mask failures
+   - Raise explicit exceptions if subprocess dies
+   - Timeout on unresponsive servers (default 30s)
+
+---
+
+## [Feature: Language Detection for RPC] <rpc-feature-02>
+
+**Requirement:** Auto-detect when to use RPC bridge based on workspace indicators.
+
+**Detection Logic:**
+
+```python
+def should_use_rpc_bridge(workspace_path: Path, language: LanguageType) -> bool:
+    """
+    Determine if RPC bridge should be used for this workspace.
+
+    Checks for:
+    - Presence of RPC server entry point
+    - Language-specific RPC server indicators
+    """
+
+    # Dart: Check for bin/serve.dart or lib/adc_server.dart
+    if language == LanguageType.DART:
+        if (workspace_path / "bin" / "serve.dart").exists():
+            return True
+        if (workspace_path / "lib" / "adc_server.dart").exists():
+            return True
+
+    # Future: Add detection for other languages
+    # TypeScript: Check for dist/rpc-server.js
+    # Go: Check for bin/rpc-server
+
+    return False
+```
+
+**Update Bridge Selection:**
+
+```python
+def _select_bridge(language: LanguageType, workspace: Path) -> Tuple[BridgeType, Any]:
+    """Select appropriate bridge for language."""
+
+    # Try RPC bridge first if available
+    if should_use_rpc_bridge(workspace, language):
+        if language == LanguageType.DART:
+            command = ["dart", "run", str(workspace / "bin" / "serve.dart")]
+            return BridgeType.RPC, RPCBridge(command)
+
+    # Fall back to existing bridge selection
+    if language == LanguageType.PYTHON:
+        return BridgeType.PYTHON_DIRECT, PythonBridge(workspace)
+    else:
+        return BridgeType.CLI_FALLBACK, CliFallbackBridge(workspace)
+```
+
+---
+
+## [Feature: Dart Language Support] <rpc-feature-03>
+
+**Requirement:** Add Dart to supported languages with RPC bridge detection.
+
+**Update metadata.py:**
+
+```python
+class LanguageType(str, Enum):
+    """Detected language types."""
+    PYTHON = "python"
+    NODEJS = "nodejs"
+    DART = "dart"  # NEW
+    RUST = "rust"
+    GO = "go"
+    JAVA = "java"
+    CPP = "cpp"
+    UNKNOWN = "unknown"
+
+class BridgeType(str, Enum):
+    """Bridge implementation types."""
+    PYTHON_DIRECT = "python_direct"
+    NODEJS_SUBPROCESS = "nodejs_subprocess"
+    RPC = "rpc"  # NEW: MessagePack RPC bridge
+    CLI_FALLBACK = "cli_fallback"
+    GO_CTYPES = "go_ctypes"
+    RUST_PYO3 = "rust_pyo3"
+    JAVA_JNI = "java_jni"
+```
+
+**Update detection.py:**
+
+```python
+LANGUAGE_INDICATORS = {
+    LanguageType.DART: {
+        "pubspec.yaml": 1.0,  # Primary indicator
+        "lib/*.dart": 0.8,
+        "bin/*.dart": 0.6,
+    },
+    # ... existing indicators
+}
+```
+
+---
+
+## [Example: Dart ADC RPC Server] <rpc-example-01>
+
+**Purpose:** Reference implementation showing how to implement ADC RPC protocol in Dart.
+
+**File Structure:**
+```
+tests/library_loader/fixtures/dart_simple_math/
+├── pubspec.yaml              # Dart package config
+├── lib/
+│   ├── simple_math.dart      # Math library with ADC markers
+│   └── adc_server.dart       # MessagePack RPC server
+└── bin/
+    └── serve.dart            # Entry point
+```
+
+**simple_math.dart:**
+```dart
+// ADC-IMPLEMENTS: simple-math-dart v1.0.0
+
+class SimpleMath {
+  /// ADC-IMPLEMENTS: simple-math-dart::add
+  static int add(int a, int b) {
+    return a + b;
+  }
+
+  /// ADC-IMPLEMENTS: simple-math-dart::multiply
+  static int multiply(int a, int b) {
+    return a * b;
+  }
+}
+```
+
+**adc_server.dart:**
+```dart
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:msgpack_dart/msgpack_dart.dart';
+
+class ADCServer {
+  final Map<String, Function> handlers = {};
+
+  void register(String method, Function handler) {
+    handlers[method] = handler;
+  }
+
+  Future<void> serve() async {
+    // Read from stdin, write to stdout (length-prefixed MessagePack)
+    while (true) {
+      try {
+        // Read 4-byte length header
+        final lengthBytes = await _readBytes(stdin, 4);
+        if (lengthBytes == null) break;
+
+        final length = ByteData.view(lengthBytes.buffer)
+            .getUint32(0, Endian.big);
+
+        // Read request payload
+        final requestBytes = await _readBytes(stdin, length);
+        if (requestBytes == null) break;
+
+        final request = deserialize(requestBytes);
+        final method = request['c'] as String;
+        final args = request['a'] as Map;
+
+        // Invoke handler
+        final handler = handlers[method];
+        if (handler == null) {
+          _sendError("Unknown method: $method");
+          continue;
+        }
+
+        try {
+          final result = Function.apply(handler, [], args);
+          _sendResult(result);
+        } catch (e) {
+          _sendError(e.toString());
+        }
+      } catch (e) {
+        stderr.writeln("Server error: $e");
+        break;
+      }
+    }
+  }
+
+  Future<Uint8List?> _readBytes(Stream<List<int>> stream, int count) async {
+    final bytes = <int>[];
+    await for (var chunk in stream) {
+      bytes.addAll(chunk);
+      if (bytes.length >= count) {
+        return Uint8List.fromList(bytes.sublist(0, count));
+      }
+    }
+    return null;
+  }
+
+  void _sendResult(dynamic result) {
+    final response = serialize({'r': result});
+    _writeResponse(response);
+  }
+
+  void _sendError(String error) {
+    final response = serialize({'e': error});
+    _writeResponse(response);
+  }
+
+  void _writeResponse(List<int> payload) {
+    final length = ByteData(4)..setUint32(0, payload.length, Endian.big);
+    stdout.add(length.buffer.asUint8List());
+    stdout.add(payload);
+    stdout.flush();
+  }
+}
+```
+
+**serve.dart:**
+```dart
+import 'package:dart_simple_math/simple_math.dart';
+import 'package:dart_simple_math/adc_server.dart';
+
+void main() async {
+  final server = ADCServer();
+
+  // Register methods
+  server.register('add', (Map args) {
+    return SimpleMath.add(args['a'] as int, args['b'] as int);
+  });
+
+  server.register('multiply', (Map args) {
+    return SimpleMath.multiply(args['a'] as int, args['b'] as int);
+  });
+
+  await server.serve();
+}
+```
+
+---
+
+## [Parity: Implementation Files] <rpc-parity-01>
+
+**Core Bridge Implementation:**
+```
+src/adc/library_loader/bridges/rpc_bridge.py
+  - class RPCBridge
+  - class RPCError(Exception)
+  - class RPCTimeoutError(RPCError)
+```
+
+**Metadata Updates:**
+```
+src/adc/library_loader/metadata.py
+  - Add LanguageType.DART
+  - Add BridgeType.RPC
+  - Update LibraryMetadata.supports_* for RPC bridge
+```
+
+**Detection Updates:**
+```
+src/adc/library_loader/detection.py
+  - Add DART language indicators
+  - Add should_use_rpc_bridge() function
+```
+
+**Loader Updates:**
+```
+src/adc/library_loader/__init__.py
+  - Update _select_bridge() to try RPC first
+  - Export RPCBridge, RPCError
+```
+
+**Test Fixtures:**
+```
+tests/library_loader/fixtures/dart_simple_math/
+  - pubspec.yaml
+  - lib/simple_math.dart
+  - lib/adc_server.dart
+  - bin/serve.dart
+```
+
+**Integration Tests:**
+```
+tests/library_loader/test_dart_rpc.py
+  - test_dart_simple_math_via_rpc()
+  - test_dart_marker_verification()
+  - test_rpc_error_handling()
+```
+
+---
+
+## [Validation: Success Criteria] <rpc-validation-01>
+
+**Functional Requirements:**
+1. RPCBridge can launch Dart subprocess and communicate via MessagePack
+2. Method calls succeed with correct results
+3. Remote exceptions propagate as RPCError with message
+4. Subprocess cleanup happens on close/context exit
+
+**Performance Requirements:**
+1. RPC overhead < 10ms per method call (local subprocess)
+2. MessagePack serialization faster than JSON baseline
+
+**Compatibility Requirements:**
+1. All existing ULL tests still pass (no regression)
+2. Python bridge still works
+3. CLI fallback still works
+4. Dart RPC bridge selected automatically when bin/serve.dart exists
+
+**Code Quality:**
+1. ADC-IMPLEMENTS markers present in all implementation files
+2. Fail-not-fallback principle enforced (no silent failures)
+3. Proper exception handling and cleanup
+4. Type hints throughout
+
+---
+
+## [Future: Additional RPC Languages] <rpc-future-01>
+
+**TypeScript/Node.js:**
+```typescript
+// bin/rpc-server.ts
+import * as msgpack from 'msgpack-lite';
+
+class ADCServer {
+  private handlers = new Map<string, Function>();
+
+  register(method: string, handler: Function): void {
+    this.handlers.set(method, handler);
+  }
+
+  async serve(): Promise<void> {
+    // Similar length-prefixed MessagePack protocol
+  }
+}
+```
+
+**Go:**
+```go
+// cmd/rpc-server/main.go
+import "github.com/vmihailenco/msgpack/v5"
+
+type ADCServer struct {
+    handlers map[string]func(map[string]interface{}) (interface{}, error)
+}
+
+func (s *ADCServer) Serve() error {
+    // Similar length-prefixed MessagePack protocol
+}
+```
+
+**Rust:**
+```rust
+// src/bin/rpc-server.rs
+use rmp_serde::{Deserializer, Serializer};
+
+struct ADCServer {
+    handlers: HashMap<String, Box<dyn Fn(HashMap<String, Value>) -> Result<Value>>>,
+}
+
+impl ADCServer {
+    fn serve(&self) -> Result<()> {
+        // Similar length-prefixed MessagePack protocol
+    }
+}
+```
+
+**Universal Pattern:**
+- All languages implement same wire protocol
+- 4-byte big-endian length prefix
+- MessagePack payload with {"c": ..., "a": ...} / {"r": ...} / {"e": ...}
+- Stdin/stdout communication
+- Language-specific entry points detected by ULL

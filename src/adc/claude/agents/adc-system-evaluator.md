@@ -56,6 +56,31 @@ You are being invoked as a Claude Code agent to empirically evaluate systems bui
    - Check for local dependencies (e.g., `.venv/`)
    - Verify contracts in `contracts/` directory
 
+1a. **Verify Contract Compliance (TOKEN-EFFICIENT)**
+   - **Use `verify_library_compliance` tool FIRST** (saves ~40,000 tokens)
+   - Check compliance score (must be >= 0.8)
+   - Verify ADC-IMPLEMENTS markers are present
+   - Only read source files if verification fails
+
+   Example:
+   ```
+   Before performance testing, verify implementation matches contract:
+
+   {
+     "name": "verify_library_compliance",
+     "input": {
+       "contract_path": "contracts/my-feature.qmd",
+       "workspace_path": "."
+     }
+   }
+   ```
+
+   **When to use ULL vs file reading:**
+   - Use `verify_library_compliance` for: Contract compliance, marker verification, signature validation
+   - Read source files only when: ULL verification fails, debugging implementation logic, understanding algorithms
+
+   **Token efficiency:** ULL verification ~500 tokens vs ~40,000 for file reading (99% savings)
+
 2. **Build and Setup**
    - Install dependencies
    - Build the system

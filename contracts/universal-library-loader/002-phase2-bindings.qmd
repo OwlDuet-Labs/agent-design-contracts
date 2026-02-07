@@ -1,0 +1,936 @@
+---
+contract_id: universal-library-loader-adc-002
+title: "Phase 2: Native Language Bindings for Full Verification"
+author: "ADC System Architect"
+status: "proposed"
+version: 1.0
+created_date: "2025-12-18"
+last_updated: "2025-12-18"
+parent_contract: "universal-library-loader-adc-001"
+---
+
+## [Rationale: Phase 2 Motivation] <ull2-rationale-01>
+
+**Phase 1 Limitation:** CLI fallback for Go/Rust/Java/C++ provides only LIMITED verification:
+- Can verify commands exist
+- Cannot verify type signatures
+- Cannot verify parameter annotations
+- Cannot verify docstrings
+
+**Phase 2 Goal:** Achieve FULL verification for all languages by requiring Python bindings.
+
+**Token Economics:** Phase 1 CLI fallback uses ~1,000 tokens (already 98% better than file reading). Phase 2 bindings will use ~1,600 tokens (same as Python) but provide full signature verification.
+
+**Trade-off:** Phase 2 requires developers to:
+1. Generate Python bindings as part of build process
+2. Add binding configuration to project
+3. Learn binding tools (PyO3, ctypes, JNI)
+
+**Value Proposition:**
+- Auditor can verify complete interface compliance
+- No signature mismatch bugs in production
+- Same verification quality across all languages
+- Developers get better feedback during development
+
+**Progressive Enhancement:** Phase 2 is OPTIONAL. CLI fallback remains available for projects that don't need full verification.
+
+---
+
+## [Rationale: Binding Technology Selection] <ull2-rationale-02>
+
+**Go → ctypes (C-shared library):**
+- Use `go build -buildmode=c-shared`
+- Generates `.so` / `.dll` / `.dylib` compatible with Python ctypes
+- No external dependencies beyond Go toolchain
+- Good documentation and community support
+
+**Rust → PyO3 (Native Python bindings):**
+- Use PyO3 crate for Rust-to-Python bindings
+- Generates native Python module (`.so`)
+- Type-safe with excellent compile-time checks
+- Most popular Rust-Python binding solution
+
+**Java → Jep (Java Embedded Python):**
+- Use Jep library for bidirectional Java-Python calls
+- Runs JVM inside Python process
+- Access to full Java reflection for signature introspection
+- Well-maintained, used in production systems
+
+**C++ → pybind11:**
+- Modern C++11 binding library
+- Header-only, minimal setup
+- Automatic type conversion
+- Excellent documentation
+
+---
+
+## [Implementation: Go Bindings via ctypes] <ull2-impl-01>
+
+**Go Side - Export Functions:**
+
+```go
+package main
+
+import "C"
+import (
+    "encoding/json"
+    "unsafe"
+)
+
+//export CreateTask
+func CreateTask(titlePtr *C.char, descPtr *C.char) *C.char {
+    title := C.GoString(titlePtr)
+    desc := C.GoString(descPtr)
+
+    task := Task{
+        ID:          generateID(),
+        Title:       title,
+        Description: desc,
+        Completed:   false,
+    }
+
+    jsonBytes, _ := json.Marshal(task)
+    return C.CString(string(jsonBytes))
+}
+
+//export ListTasks
+func ListTasks() *C.char {
+    tasks := getAllTasks()
+    jsonBytes, _ := json.Marshal(tasks)
+    return C.CString(string(jsonBytes))
+}
+
+//export FreeString
+func FreeString(s *C.char) {
+    C.free(unsafe.Pointer(s))
+}
+
+func main() {} // Required but not used
+```
+
+**Build Command:**
+```bash
+go build -buildmode=c-shared -o libtasks.so
+```
+
+**Python Side - Load Library:**
+
+```python
+from ctypes import CDLL, c_char_p, c_void_p
+import json
+from pathlib import Path
+
+class GoBridge:
+    """Load Go shared library via ctypes."""
+
+    def __init__(self, workspace_path: Path):
+        self.workspace_path = workspace_path
+        self.lib_path = self._find_shared_library()
+        self.lib = None
+
+    def _find_shared_library(self) -> Path:
+        """Find compiled .so / .dll / .dylib file."""
+        extensions = [".so", ".dll", ".dylib"]
+        search_dirs = [
+            self.workspace_path,
+            self.workspace_path / "bin",
+            self.workspace_path / "build",
+        ]
+
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
+            for ext in extensions:
+                for lib_file in search_dir.glob(f"*{ext}"):
+                    return lib_file
+
+        raise LibraryLoadError(
+            f"No Go shared library found in {self.workspace_path}\n"
+            f"  Searched: {', '.join(str(d) for d in search_dirs)}\n"
+            f"  Expected: *.so / *.dll / *.dylib\n"
+            f"  Fix: Build with 'go build -buildmode=c-shared -o libmylib.so'"
+        )
+
+    def load(self) -> Any:
+        """Load shared library and return proxy."""
+        self.lib = CDLL(str(self.lib_path))
+
+        # Configure function signatures
+        self.lib.CreateTask.argtypes = [c_char_p, c_char_p]
+        self.lib.CreateTask.restype = c_void_p
+
+        self.lib.ListTasks.argtypes = []
+        self.lib.ListTasks.restype = c_void_p
+
+        self.lib.FreeString.argtypes = [c_void_p]
+        self.lib.FreeString.restype = None
+
+        return self._create_proxy()
+
+    def _create_proxy(self) -> Any:
+        """Create Python proxy with automatic JSON marshaling."""
+        bridge = self
+
+        class GoProxy:
+            def create_task(self, title: str, description: str):
+                result_ptr = bridge.lib.CreateTask(
+                    title.encode('utf-8'),
+                    description.encode('utf-8')
+                )
+                result_json = bridge._ptr_to_string(result_ptr)
+                bridge.lib.FreeString(result_ptr)
+                return json.loads(result_json)
+
+            def list_tasks(self):
+                result_ptr = bridge.lib.ListTasks()
+                result_json = bridge._ptr_to_string(result_ptr)
+                bridge.lib.FreeString(result_ptr)
+                return json.loads(result_json)
+
+        return GoProxy()
+
+    def _ptr_to_string(self, ptr: c_void_p) -> str:
+        """Convert C string pointer to Python string."""
+        return c_char_p(ptr).value.decode('utf-8')
+
+    def get_signature(self, function_name: str) -> inspect.Signature:
+        """
+        Get function signature.
+
+        For Go bindings, we can introspect the Python proxy methods.
+        """
+        proxy = self._create_proxy()
+        func = getattr(proxy, function_name, None)
+        if func is None:
+            raise InterfaceConformanceError(
+                f"Function '{function_name}' not found in Go library"
+            )
+
+        return inspect.signature(func)
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/bridges/go_bridge.py`
+- **Tests:** `tests/bridges/test_go_bridge.py`
+- **Documentation:** `docs/go-binding-setup.md`
+
+---
+
+## [Implementation: Rust Bindings via PyO3] <ull2-impl-02>
+
+**Rust Side - PyO3 Setup:**
+
+**Cargo.toml:**
+```toml
+[package]
+name = "mytasks"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "mytasks"
+crate-type = ["cdylib"]  # Creates Python-importable .so
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+```
+
+**src/lib.rs:**
+```rust
+use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[pyclass]
+struct Task {
+    #[pyo3(get, set)]
+    id: String,
+    #[pyo3(get, set)]
+    title: String,
+    #[pyo3(get, set)]
+    description: String,
+    #[pyo3(get, set)]
+    completed: bool,
+}
+
+#[pymethods]
+impl Task {
+    #[new]
+    fn new(title: String, description: String) -> Self {
+        Task {
+            id: generate_id(),
+            title,
+            description,
+            completed: false,
+        }
+    }
+}
+
+#[pyfunction]
+fn create_task(title: String, description: String) -> PyResult<Task> {
+    Ok(Task::new(title, description))
+}
+
+#[pyfunction]
+fn list_tasks() -> PyResult<Vec<Task>> {
+    // Implementation
+    Ok(vec![])
+}
+
+#[pyfunction]
+fn complete_task(task_id: String) -> PyResult<Task> {
+    // Implementation
+    Ok(Task::new("temp".into(), "temp".into()))
+}
+
+#[pymodule]
+fn mytasks(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(create_task, m)?)?;
+    m.add_function(wrap_pyfunction!(list_tasks, m)?)?;
+    m.add_function(wrap_pyfunction!(complete_task, m)?)?;
+    m.add_class::<Task>()?;
+    Ok(())
+}
+```
+
+**Build Command:**
+```bash
+maturin build --release
+# Or: pip install maturin && maturin develop
+```
+
+**Python Side - Load Module:**
+
+```python
+import importlib
+import inspect
+from pathlib import Path
+
+class RustBridge:
+    """Load Rust library via PyO3 bindings."""
+
+    def __init__(self, workspace_path: Path):
+        self.workspace_path = workspace_path
+        self.module_name = self._detect_module_name()
+        self.module = None
+
+    def _detect_module_name(self) -> str:
+        """Extract module name from Cargo.toml."""
+        cargo_toml = self.workspace_path / "Cargo.toml"
+        if not cargo_toml.exists():
+            raise LibraryLoadError(
+                f"No Cargo.toml found in {self.workspace_path}\n"
+                f"  Fix: Ensure this is a valid Rust project"
+            )
+
+        # Parse Cargo.toml to get [lib] name
+        # Simple regex for now, could use toml parser
+        content = cargo_toml.read_text()
+        import re
+        match = re.search(r'name\s*=\s*"([^"]+)"', content)
+        if match:
+            return match.group(1)
+
+        raise LibraryLoadError("Could not find library name in Cargo.toml")
+
+    def load(self) -> Any:
+        """Import compiled Rust module."""
+        # Add workspace to path
+        import sys
+        if str(self.workspace_path) not in sys.path:
+            sys.path.insert(0, str(self.workspace_path))
+
+        # Try to import from target/release or target/wheels
+        try:
+            self.module = importlib.import_module(self.module_name)
+            return self._create_proxy()
+        except ImportError as e:
+            raise LibraryLoadError(
+                f"Failed to import Rust module '{self.module_name}'\n"
+                f"  Workspace: {self.workspace_path}\n"
+                f"  Error: {e}\n"
+                f"  Fix: Build with 'maturin build --release' or 'maturin develop'\n"
+                f"  See: docs/rust-binding-setup.md"
+            )
+
+    def _create_proxy(self) -> Any:
+        """Create proxy object (same as PythonBridge)."""
+        class RustProxy:
+            pass
+
+        proxy = RustProxy()
+
+        # Copy all public functions
+        for name in dir(self.module):
+            if not name.startswith('_'):
+                attr = getattr(self.module, name)
+                if callable(attr):
+                    setattr(proxy, name, attr)
+
+        return proxy
+
+    def get_signature(self, function_name: str) -> inspect.Signature:
+        """Get function signature (works like Python)."""
+        if self.module is None:
+            raise LibraryLoadError("Module not loaded")
+
+        func = getattr(self.module, function_name, None)
+        if func is None:
+            raise InterfaceConformanceError(
+                f"Function '{function_name}' not found in Rust module"
+            )
+
+        # PyO3 functions have full Python signatures!
+        return inspect.signature(func)
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/bridges/rust_bridge.py`
+- **Tests:** `tests/bridges/test_rust_bridge.py`
+- **Documentation:** `docs/rust-binding-setup.md`
+
+---
+
+## [Implementation: Java Bindings via Jep] <ull2-impl-03>
+
+**Java Side - Standard Java Code:**
+
+```java
+package com.example.tasks;
+
+public class TaskManager {
+    public static class Task {
+        public String id;
+        public String title;
+        public String description;
+        public boolean completed;
+
+        public Task(String title, String description) {
+            this.id = generateId();
+            this.title = title;
+            this.description = description;
+            this.completed = false;
+        }
+    }
+
+    public static Task createTask(String title, String description) {
+        return new Task(title, description);
+    }
+
+    public static List<Task> listTasks() {
+        // Implementation
+        return new ArrayList<>();
+    }
+
+    public static Task completeTask(String taskId) {
+        // Implementation
+        return null;
+    }
+}
+```
+
+**Build Command:**
+```bash
+mvn package
+# Creates target/mytasks-1.0.jar
+```
+
+**Python Side - Load via Jep:**
+
+```python
+import jep
+from pathlib import Path
+
+class JavaBridge:
+    """Load Java library via Jep (Java Embedded Python)."""
+
+    def __init__(self, workspace_path: Path):
+        self.workspace_path = workspace_path
+        self.jar_path = self._find_jar_file()
+        self.jep_instance = None
+        self.class_name = "com.example.tasks.TaskManager"
+
+    def _find_jar_file(self) -> Path:
+        """Find compiled JAR file."""
+        search_dirs = [
+            self.workspace_path / "target",
+            self.workspace_path / "build" / "libs",
+        ]
+
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
+            for jar_file in search_dir.glob("*.jar"):
+                # Skip sources/javadoc jars
+                if "sources" not in jar_file.name and "javadoc" not in jar_file.name:
+                    return jar_file
+
+        raise LibraryLoadError(
+            f"No JAR file found in {self.workspace_path}\n"
+            f"  Searched: {', '.join(str(d) for d in search_dirs)}\n"
+            f"  Fix: Build with 'mvn package' or 'gradle build'"
+        )
+
+    def load(self) -> Any:
+        """Start JVM and import Java class."""
+        # Create Jep instance with classpath
+        self.jep_instance = jep.Jep(
+            classpath=[str(self.jar_path)]
+        )
+
+        # Import Java class
+        self.jep_instance.eval(f"import {self.class_name}")
+
+        return self._create_proxy()
+
+    def _create_proxy(self) -> Any:
+        """Create Python proxy for Java methods."""
+        bridge = self
+
+        class JavaProxy:
+            def create_task(self, title: str, description: str):
+                # Call Java static method
+                result = bridge.jep_instance.invoke(
+                    f"{bridge.class_name}.createTask",
+                    title,
+                    description
+                )
+                # Convert Java object to Python dict
+                return {
+                    "id": result.id,
+                    "title": result.title,
+                    "description": result.description,
+                    "completed": result.completed,
+                }
+
+            def list_tasks(self):
+                result = bridge.jep_instance.invoke(
+                    f"{bridge.class_name}.listTasks"
+                )
+                # Convert Java List to Python list
+                return [self._java_task_to_dict(task) for task in result]
+
+            def _java_task_to_dict(self, java_task):
+                return {
+                    "id": java_task.id,
+                    "title": java_task.title,
+                    "description": java_task.description,
+                    "completed": java_task.completed,
+                }
+
+        return JavaProxy()
+
+    def get_signature(self, function_name: str) -> inspect.Signature:
+        """
+        Get function signature via Java reflection.
+
+        Jep provides access to Java reflection APIs, which we can use
+        to introspect method signatures.
+        """
+        # Use Java reflection to get method signature
+        self.jep_instance.eval(f"""
+            import java.lang.reflect.Method;
+            Class<?> clazz = Class.forName("{self.class_name}");
+            Method method = clazz.getMethod("{function_name}", String.class, String.class);
+        """)
+
+        # Extract parameter types and return type
+        param_types = self.jep_instance.getValue("method.getParameterTypes()")
+        return_type = self.jep_instance.getValue("method.getReturnType()")
+
+        # Convert to Python signature
+        # (Simplified - full implementation would map Java types to Python types)
+        return inspect.Signature(
+            parameters=[
+                inspect.Parameter("title", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str),
+                inspect.Parameter("description", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str),
+            ],
+            return_annotation=dict  # Java Task object → Python dict
+        )
+
+    def __del__(self):
+        """Cleanup JVM instance."""
+        if self.jep_instance:
+            self.jep_instance.close()
+```
+
+**Installation Requirements:**
+```bash
+pip install jep
+# Requires Java JDK installed and JAVA_HOME set
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/bridges/java_bridge.py`
+- **Tests:** `tests/bridges/test_java_bridge.py`
+- **Documentation:** `docs/java-binding-setup.md`
+
+---
+
+## [Feature: Auto-Binding Detection] <ull2-feature-01>
+
+Automatically detect if Python bindings are available and prefer them over CLI fallback.
+
+**Detection Strategy:**
+```python
+def _select_bridge(language: LanguageType, workspace: Path) -> tuple[BridgeType, Any]:
+    """
+    Select appropriate bridge for language.
+
+    Priority order:
+    1. Native bindings (if available)
+    2. CLI fallback (if bindings not found)
+    """
+    if language == LanguageType.PYTHON:
+        return BridgeType.PYTHON_DIRECT, PythonBridge(workspace)
+
+    elif language == LanguageType.NODEJS:
+        return BridgeType.NODEJS_SUBPROCESS, NodeBridge(workspace)
+
+    elif language == LanguageType.RUST:
+        # Try PyO3 bindings first
+        if _has_pyo3_bindings(workspace):
+            return BridgeType.RUST_PYO3, RustBridge(workspace)
+        else:
+            return BridgeType.CLI_FALLBACK, CliFallbackBridge(workspace)
+
+    elif language == LanguageType.GO:
+        # Try ctypes bindings first
+        if _has_go_shared_library(workspace):
+            return BridgeType.GO_CTYPES, GoBridge(workspace)
+        else:
+            return BridgeType.CLI_FALLBACK, CliFallbackBridge(workspace)
+
+    elif language == LanguageType.JAVA:
+        # Try Jep bindings first
+        if _has_jar_file(workspace):
+            return BridgeType.JAVA_JNI, JavaBridge(workspace)
+        else:
+            return BridgeType.CLI_FALLBACK, CliFallbackBridge(workspace)
+
+    else:
+        return BridgeType.CLI_FALLBACK, CliFallbackBridge(workspace)
+
+
+def _has_pyo3_bindings(workspace: Path) -> bool:
+    """Check if Rust project has PyO3 bindings built."""
+    # Look for compiled .so in target/release or target/wheels
+    search_paths = [
+        workspace / "target" / "release",
+        workspace / "target" / "wheels",
+    ]
+
+    for path in search_paths:
+        if path.exists():
+            for so_file in path.glob("*.so"):
+                return True
+
+    return False
+
+
+def _has_go_shared_library(workspace: Path) -> bool:
+    """Check if Go project has compiled shared library."""
+    search_dirs = [workspace, workspace / "bin", workspace / "build"]
+
+    for search_dir in search_dirs:
+        if search_dir.exists():
+            for ext in [".so", ".dll", ".dylib"]:
+                if list(search_dir.glob(f"*{ext}")):
+                    return True
+
+    return False
+
+
+def _has_jar_file(workspace: Path) -> bool:
+    """Check if Java project has compiled JAR."""
+    search_dirs = [workspace / "target", workspace / "build" / "libs"]
+
+    for search_dir in search_dirs:
+        if search_dir.exists():
+            jars = list(search_dir.glob("*.jar"))
+            # Exclude sources/javadoc jars
+            if any("sources" not in j.name and "javadoc" not in j.name for j in jars):
+                return True
+
+    return False
+```
+
+**Parity:**
+- **Implementation Scope:** Update `src/adc/library_loader/__init__.py`
+- **Tests:** `tests/test_auto_binding_detection.py`
+
+---
+
+## [Feature: Build Integration Helpers] <ull2-feature-02>
+
+Provide helper scripts to generate bindings as part of project build.
+
+**Makefile Integration:**
+```makefile
+# Rust project Makefile
+.PHONY: build bindings test
+
+build:
+	cargo build --release
+
+bindings:
+	maturin build --release
+	pip install target/wheels/*.whl
+
+test:
+	cargo test
+	pytest tests/
+
+adc-verify: bindings
+	python -m adc.library_loader.verify --contract contracts/my-contract.qmd --workspace .
+```
+
+**ADC Contract Metadata:**
+```yaml
+---
+contract_id: my-rust-library-adc-001
+title: "My Rust Library"
+language: rust
+binding_config:
+  type: pyo3
+  build_command: "maturin build --release"
+  install_command: "pip install target/wheels/*.whl"
+  verify_command: "python -m adc.library_loader.verify"
+---
+```
+
+**Auto-Build Support:**
+```python
+def load_library_with_build(
+    workspace_path: Path,
+    contract_path: Path = None,
+    auto_build: bool = False
+) -> tuple[Any, LibraryMetadata]:
+    """
+    Load library with optional auto-build of bindings.
+
+    If auto_build=True and contract specifies binding_config,
+    automatically run build commands before loading.
+    """
+    if auto_build and contract_path:
+        binding_config = _extract_binding_config(contract_path)
+        if binding_config:
+            _run_build_commands(binding_config, workspace_path)
+
+    return load_library(workspace_path)
+
+
+def _extract_binding_config(contract_path: Path) -> dict:
+    """Extract binding_config from contract YAML front matter."""
+    # Parse YAML and return binding_config section
+    pass
+
+
+def _run_build_commands(config: dict, workspace: Path):
+    """Execute build commands to generate bindings."""
+    build_cmd = config.get("build_command")
+    install_cmd = config.get("install_command")
+
+    if build_cmd:
+        subprocess.run(build_cmd, shell=True, cwd=workspace, check=True)
+
+    if install_cmd:
+        subprocess.run(install_cmd, shell=True, cwd=workspace, check=True)
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/build_helpers.py`
+- **Tests:** `tests/test_build_integration.py`
+- **Documentation:** `docs/build-integration.md`
+
+---
+
+## [Constraint: Binding Requirements] <ull2-constraint-01>
+
+**Developer Requirements for Phase 2:**
+
+**Rust Projects:**
+1. Add PyO3 to Cargo.toml dependencies
+2. Set crate-type = ["cdylib"] in [lib] section
+3. Annotate functions with #[pyfunction]
+4. Create #[pymodule] entry point
+5. Build with `maturin build --release`
+
+**Go Projects:**
+1. Import "C" package in source
+2. Add //export comments to exported functions
+3. Use C-compatible types (or JSON marshaling)
+4. Build with `go build -buildmode=c-shared -o libname.so`
+5. Implement FreeString for memory management
+
+**Java Projects:**
+1. Install Jep: `pip install jep`
+2. Set JAVA_HOME environment variable
+3. Build JAR with `mvn package` or `gradle build`
+4. Ensure classes are public and methods are static (or provide instances)
+
+**C++ Projects:**
+1. Add pybind11 to project
+2. Create Python binding module
+3. Build with CMake + pybind11
+4. Install generated .so module
+
+**Verification:**
+All binding approaches must:
+- Enable `inspect.signature()` introspection
+- Support type annotations where available
+- Provide clear error messages for missing bindings
+- Document build process in contract metadata
+
+**Parity:**
+- **Documentation:** `docs/binding-requirements.md`
+- **Examples:** `examples/` directory with sample projects for each language
+
+---
+
+## [TestScenario: Rust PyO3 Full Verification] <ull2-test-01>
+
+**Scenario:** Verify Rust library with PyO3 bindings achieves same verification quality as Python.
+
+**Setup:**
+1. Create Rust project with PyO3 bindings
+2. Build bindings: `maturin develop`
+3. Run verification with library loader
+4. Compare to Python verification quality
+
+**Expected Results:**
+- Bridge type: RUST_PYO3
+- Supports signature verification: True
+- All functions introspectable
+- Type annotations available
+- Token usage: ~1,600 (same as Python)
+- Compliance score: 1.0
+
+**Comparison:**
+
+| Metric | CLI Fallback | PyO3 Bindings |
+|--------|--------------|---------------|
+| Token usage | 1,000 | 1,600 |
+| Functions verified | Yes | Yes |
+| Signatures verified | No | Yes |
+| Types verified | No | Yes |
+| Compliance confidence | Medium | High |
+
+**Parity:**
+- **Implementation Scope:** `tests/integration/test_rust_pyo3_verification.py`
+- **Fixtures:** `tests/fixtures/rust-pyo3-tasks/`
+
+---
+
+## [TestScenario: Go ctypes Full Verification] <ull2-test-02>
+
+**Scenario:** Verify Go library with C-shared bindings.
+
+**Setup:**
+1. Create Go project with C exports
+2. Build shared library: `go build -buildmode=c-shared -o libtasks.so`
+3. Run verification
+4. Verify signature introspection works
+
+**Expected Results:**
+- Bridge type: GO_CTYPES
+- Supports signature verification: True (via Python proxy methods)
+- Token usage: ~1,600
+- Compliance score: 1.0
+
+**Parity:**
+- **Implementation Scope:** `tests/integration/test_go_ctypes_verification.py`
+- **Fixtures:** `tests/fixtures/go-ctypes-tasks/`
+
+---
+
+## [Parity: Phase 2 Implementation Files] <ull2-parity-01>
+
+**Additional Files for Phase 2:**
+```
+src/adc/library_loader/
+  bridges/
+    go_bridge.py           # NEW: Go ctypes bindings
+    rust_bridge.py         # NEW: Rust PyO3 bindings
+    java_bridge.py         # NEW: Java JNI/Jep bindings
+    cpp_bridge.py          # NEW: C++ pybind11 bindings
+
+  build_helpers.py         # NEW: Auto-build integration
+
+docs/
+  binding-requirements.md  # NEW: Developer requirements
+  go-binding-setup.md      # NEW: Go setup guide
+  rust-binding-setup.md    # NEW: Rust setup guide
+  java-binding-setup.md    # NEW: Java setup guide
+  build-integration.md     # NEW: Build system integration
+
+examples/
+  rust-pyo3-tasks/         # NEW: Sample Rust project with PyO3
+  go-ctypes-tasks/         # NEW: Sample Go project with C-shared
+  java-jep-tasks/          # NEW: Sample Java project with Jep
+
+tests/
+  bridges/
+    test_go_bridge.py      # NEW
+    test_rust_bridge.py    # NEW
+    test_java_bridge.py    # NEW
+
+  integration/
+    test_rust_pyo3_verification.py    # NEW
+    test_go_ctypes_verification.py    # NEW
+    test_java_jep_verification.py     # NEW
+
+  test_auto_binding_detection.py     # NEW
+  test_build_integration.py           # NEW
+```
+
+**Implementation Priority:**
+1. Rust PyO3 (most popular, best type safety)
+2. Go ctypes (simple, no dependencies)
+3. Java Jep (larger ecosystem, more complex)
+4. C++ pybind11 (as needed)
+
+---
+
+## [Parity: Migration Path] <ull2-parity-02>
+
+**Gradual Migration from CLI Fallback to Bindings:**
+
+**Week 1-2: Phase 1 Usage**
+- Use CLI fallback for all compiled languages
+- Verify commands exist
+- Marker verification works
+- Document limitations
+
+**Week 3-4: Add Rust PyO3 Support**
+- Implement RustBridge
+- Test on sample projects
+- Measure token efficiency
+- Document setup process
+
+**Week 5-6: Add Go ctypes Support**
+- Implement GoBridge
+- Test on sample projects
+- Compare to CLI fallback
+- Update detection logic
+
+**Week 7-8: Add Java Jep Support**
+- Implement JavaBridge
+- Test on sample projects
+- Handle JVM lifecycle
+- Document requirements
+
+**Week 9: Integration Testing**
+- Test all bridges together
+- Verify auto-detection works
+- Measure overall token savings
+- Production readiness check
+
+**Success Criteria:**
+- All bindings provide signature verification
+- Token usage matches Python (1,600 tokens)
+- Auto-detection prefers bindings over CLI
+- Clear documentation for setup
+- Developer feedback: "Worth the setup effort"

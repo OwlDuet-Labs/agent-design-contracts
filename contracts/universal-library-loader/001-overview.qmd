@@ -1,0 +1,1881 @@
+---
+contract_id: universal-library-loader-adc-001
+title: "Universal Library Loader: Token-Efficient Polyglot Introspection"
+author: "ADC System Architect"
+status: "proposed"
+version: 1.0
+created_date: "2025-12-18"
+last_updated: "2025-12-18"
+---
+
+## [Rationale: Token Economy Problem] <ull-rationale-01>
+
+The ADC auditor currently reads all source files to verify interface compliance, consuming 42,600 tokens per audit across 3 audit cycles (128,000 tokens total, $0.38 per task). This approach is catastrophically expensive:
+
+**Current Approach (Reading All Source Files):**
+- Single audit: ~42,600 tokens
+- Three audit cycles: 128,000 tokens ($0.38)
+- 48-task benchmark: 6.14M tokens ($18.42)
+
+**Problem:** The auditor doesn't need to read implementation details - it only needs to verify that:
+1. Required functions/methods exist
+2. Signatures match contract specifications (types, parameters, defaults)
+3. ADC-IMPLEMENTS markers link code to contract blocks
+
+Reading source files provides all this information but at massive token cost. We need a way to introspect library interfaces WITHOUT reading all the code.
+
+**Solution:** Universal Library Loader that provides a Python introspection interface for ANY language.
+
+**Expected Savings:**
+- Library loading approach: ~1,600 tokens per audit
+- Three audit cycles: 4,800 tokens ($0.01)
+- 48-task benchmark: 230K tokens ($0.69)
+- **Savings: $17.73 per 48-task benchmark (96% reduction)**
+
+---
+
+## [Rationale: Polyglot Challenge] <ull-rationale-02>
+
+ADC contracts can specify systems in ANY programming language:
+- Python, JavaScript/Node.js, TypeScript
+- Go, Rust, C++, Java
+- Mixed-language projects (Bazel polyglot)
+
+**Current Problem:** Each language requires different introspection approaches:
+- Python: `importlib` + `inspect` module
+- Node.js: Requires subprocess communication
+- Rust/Go/C++: Compiled languages with no native Python introspection
+
+**Design Philosophy: Progressive Enhancement**
+
+**Phase 1 (Immediate):**
+- Python/Node.js: Full signature introspection via direct loading
+- Other languages: CLI fallback (verify commands exist, not signatures)
+- ALL languages: grep for ADC-IMPLEMENTS markers (unavoidable)
+
+**Phase 2 (Future):**
+- Compiled languages: Require Python bindings generation
+- Go: `go build -buildmode=c-shared` + ctypes
+- Rust: PyO3 or cffi bindings
+- Java: JNI or Jep (Java Embedded Python)
+- Enables full signature verification like native Python
+
+**Key Insight:** CLI fallback ensures ALL languages work from day 1, even with limited verification capabilities. Python bindings progressively enhance verification quality.
+
+---
+
+## [Rationale: What Can Be Verified] <ull-rationale-03>
+
+**Library Loading Can Verify (Python/Node.js/Phase 2):**
+- Exact function signatures match contract
+- Type hints and annotations
+- Return types
+- Default parameter values
+- Docstring presence and content
+- Runtime isinstance/type validation
+- **Token cost: ~1,600 per audit**
+
+**CLI Fallback Can Verify (Go/Rust/Java/C++ Phase 1):**
+- Command exists and is executable
+- Basic output format
+- Help text presence
+- **Cannot verify: Type signatures, parameter annotations, docstrings**
+- **Token cost: ~500 per audit (less than library loading)**
+
+**Grep Always Required (All Languages):**
+- ADC-IMPLEMENTS markers exist in source
+- Markers reference valid contract IDs
+- Coverage of all contract sections
+- **Token cost: ~500 per audit (unavoidable)**
+
+**Total Token Budget:**
+- Best case (Python): 1,600 + 500 = 2,100 tokens
+- CLI fallback (Rust): 500 + 500 = 1,000 tokens
+- vs Current (reading files): 42,600 tokens
+- **Savings: 95-98% token reduction**
+
+---
+
+## [Implementation: Architecture Strategy] <ull-impl-01>
+
+**Core Principle:** Single unified Python interface regardless of implementation language.
+
+**User-Facing API:**
+```python
+from adc.library_loader import load_library
+
+# Universal interface - works for ANY language
+lib = load_library(workspace_path="./workspace")
+
+# All libraries expose standard Python interface
+result = lib.create_task(title="foo", description="bar")
+tasks = lib.list_tasks()
+
+# Introspection works regardless of implementation language
+import inspect
+sig = inspect.signature(lib.create_task)
+assert sig.parameters['title'].annotation == str
+```
+
+**Auto-Detection Strategy:**
+```
+1. Scan workspace for language indicators:
+   - setup.py / pyproject.toml → Python
+   - package.json → Node.js
+   - Cargo.toml → Rust
+   - go.mod → Go
+   - pom.xml / build.gradle → Java
+
+2. Select appropriate bridge:
+   - Python → PythonBridge (direct import)
+   - Node.js → NodeBridge (subprocess + JSON-RPC)
+   - Go/Rust/Java/C++ → CliFallbackBridge (Phase 1) or NativeBindingBridge (Phase 2)
+
+3. Wrap bridge in UniversalProxy:
+   - Provides consistent Python interface
+   - Enables inspect.signature() introspection
+   - Handles type conversion and validation
+```
+
+**Technology Stack:**
+- Python 3.10+ for core loader
+- `importlib` + `inspect` for Python introspection
+- `subprocess` + JSON-RPC for Node.js bridge
+- `ctypes` / `cffi` for compiled language bindings (Phase 2)
+- Clear error messages guide developers to fix issues
+
+---
+
+## [Implementation: Fail-Fast Philosophy] <ull-impl-02>
+
+**No Silent Failures:**
+
+When a library cannot be loaded or doesn't conform to the expected interface, the loader must fail immediately with actionable error messages:
+
+```python
+class LibraryLoadError(Exception):
+    """Raised when library cannot be loaded."""
+    pass
+
+class InterfaceConformanceError(Exception):
+    """Raised when library doesn't match expected interface."""
+    pass
+```
+
+**Error Message Examples:**
+
+```
+LibraryLoadError: Unable to detect library language in /workspace
+  Checked for: setup.py, package.json, Cargo.toml, go.mod, pom.xml
+  Fix: Ensure workspace contains language indicator file
+
+InterfaceConformanceError: Function 'create_task' signature mismatch
+  Expected: create_task(title: str, description: str) -> Task
+  Found: create_task(title: str)
+  Fix: Update implementation to match contract specification
+
+InterfaceConformanceError: Missing required function 'list_tasks'
+  Contract requires: list_tasks() -> List[Task]
+  Fix: Implement list_tasks() function in your library
+```
+
+**No Default Values:** Never silently substitute defaults when verification fails. Always fail and tell the developer exactly what's wrong.
+
+---
+
+## [Constraint: Phase 1 Scope] <ull-constraint-01>
+
+**What's In Scope for Phase 1:**
+1. Python direct import + introspection (full verification)
+2. Node.js subprocess bridge (full verification via JSON-RPC)
+3. CLI fallback for all other languages (limited verification)
+4. ADC-IMPLEMENTS marker verification via grep (all languages)
+5. Clear documentation of verification capabilities per language
+
+**What's Out of Scope for Phase 1:**
+1. Native bindings for Go/Rust/Java/C++ (deferred to Phase 2)
+2. Complex type validation beyond inspect.signature()
+3. Runtime behavior verification (still relies on tests)
+4. Cross-language type mapping (beyond basic primitives)
+
+**Success Criteria for Phase 1:**
+- Python projects: 96% token reduction vs file reading
+- Node.js projects: 96% token reduction vs file reading
+- Go/Rust/Java projects: 98% token reduction (CLI cheaper than library loading)
+- Clear error messages for interface mismatches
+- Auditor integration works end-to-end
+
+---
+
+## [Constraint: Performance Requirements] <ull-constraint-02>
+
+**Library Loading Performance:**
+- Python direct import: <100ms
+- Node.js subprocess startup: <500ms
+- CLI fallback execution: <200ms
+- Marker grep across 1000 files: <2 seconds
+- **Total audit time: <3 seconds per library**
+
+**Token Budget Targets:**
+- Python/Node.js introspection: 1,600 tokens max
+- CLI fallback verification: 500 tokens max
+- Marker grep: 500 tokens max
+- **Total: 2,100 tokens max (vs current 42,600)**
+
+**Compatibility:**
+- Works in any workspace with standard language structure
+- No modification to existing implementations required (beyond ADC-IMPLEMENTS markers)
+- Graceful degradation: CLI fallback always available
+- Clear documentation of verification trade-offs per language
+
+---
+
+## [DataModel: LibraryMetadata] <ull-model-01>
+
+Metadata about a loaded library for tracking and debugging.
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
+
+class LanguageType(str, Enum):
+    """Detected language types."""
+    PYTHON = "python"
+    NODEJS = "nodejs"
+    RUST = "rust"
+    GO = "go"
+    JAVA = "java"
+    CPP = "cpp"
+    UNKNOWN = "unknown"
+
+class BridgeType(str, Enum):
+    """Bridge implementation types."""
+    PYTHON_DIRECT = "python_direct"
+    NODEJS_SUBPROCESS = "nodejs_subprocess"
+    CLI_FALLBACK = "cli_fallback"
+    GO_CTYPES = "go_ctypes"  # Phase 2
+    RUST_PYO3 = "rust_pyo3"  # Phase 2
+    JAVA_JNI = "java_jni"    # Phase 2
+
+@dataclass
+class LibraryMetadata:
+    """Metadata about loaded library."""
+
+    workspace_path: str
+    detected_language: LanguageType
+    bridge_type: BridgeType
+
+    # Language indicators found
+    language_indicators: dict[str, bool]  # {"setup.py": True, "package.json": False, ...}
+
+    # Verification capabilities
+    supports_signature_verification: bool
+    supports_type_introspection: bool
+    supports_docstring_verification: bool
+
+    # Performance metrics
+    load_time_ms: float
+
+    # Error tracking
+    load_errors: list[str]  # Empty if successful
+
+    @property
+    def verification_level(self) -> str:
+        """Human-readable verification capability level."""
+        if self.supports_signature_verification:
+            return "FULL"  # Python, Node.js, Phase 2 bindings
+        elif self.bridge_type == BridgeType.CLI_FALLBACK:
+            return "LIMITED"  # CLI only, no signature verification
+        else:
+            return "UNKNOWN"
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/metadata.py`
+- **Tests:** `tests/test_library_metadata.py`
+
+---
+
+## [DataModel: VerificationResult] <ull-model-02>
+
+Result of interface verification against a contract.
+
+```python
+from dataclasses import dataclass, field
+from typing import Dict, List, Any
+
+@dataclass
+class SignatureMismatch:
+    """Details of a signature mismatch."""
+    function_name: str
+    expected_signature: str
+    found_signature: str
+    mismatch_details: List[str]  # ["Missing parameter 'description'", ...]
+
+@dataclass
+class VerificationResult:
+    """Result of verifying library against contract."""
+
+    # Overall status
+    is_compliant: bool
+    verification_level: str  # "FULL", "LIMITED", "MARKER_ONLY"
+
+    # Function existence checks
+    required_functions_found: List[str]
+    required_functions_missing: List[str]
+
+    # Signature verification (only if supports_signature_verification)
+    signature_matches: Dict[str, bool]  # {function_name: matches}
+    signature_mismatches: List[SignatureMismatch]
+
+    # Type verification (only if supports_type_introspection)
+    type_mismatches: List[str]
+
+    # Docstring verification (only if supports_docstring_verification)
+    missing_docstrings: List[str]
+
+    # Marker verification (always performed)
+    adc_implements_markers_found: List[str]  # ["<block-id-1>", "<block-id-2>", ...]
+    adc_implements_markers_missing: List[str]  # Expected but not found
+
+    # Metadata
+    verification_timestamp: str  # ISO format
+    library_metadata: LibraryMetadata
+
+    # Error details
+    verification_errors: List[str]
+    warnings: List[str]
+
+    @property
+    def compliance_score(self) -> float:
+        """Calculate compliance score 0.0-1.0."""
+        total_checks = len(self.required_functions_found) + len(self.required_functions_missing)
+        if total_checks == 0:
+            return 0.0
+
+        passed_checks = len(self.required_functions_found)
+
+        # Deduct for signature mismatches if verification supported
+        if self.library_metadata.supports_signature_verification:
+            passed_checks -= len(self.signature_mismatches)
+
+        # Deduct for missing markers (always required)
+        passed_checks -= len(self.adc_implements_markers_missing)
+
+        return max(0.0, min(1.0, passed_checks / total_checks))
+
+    @property
+    def is_passing(self) -> bool:
+        """Check if verification passes minimum requirements."""
+        return (
+            self.is_compliant
+            and len(self.required_functions_missing) == 0
+            and len(self.adc_implements_markers_missing) == 0
+            and self.compliance_score >= 0.8
+        )
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/verification.py`
+- **Tests:** `tests/test_verification_result.py`
+
+---
+
+## [Feature: Language Detection] <ull-feature-01>
+
+Automatically detect programming language from workspace structure.
+
+**Capabilities:**
+1. Scan workspace for language indicator files
+2. Rank languages by confidence (multiple indicators = higher confidence)
+3. Handle polyglot projects (Bazel multi-language)
+4. Provide clear errors when language cannot be detected
+
+**Language Indicators:**
+```python
+LANGUAGE_INDICATORS = {
+    LanguageType.PYTHON: [
+        "setup.py",
+        "pyproject.toml",
+        "requirements.txt",
+        "Pipfile",
+        "poetry.lock",
+    ],
+    LanguageType.NODEJS: [
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "tsconfig.json",
+    ],
+    LanguageType.RUST: [
+        "Cargo.toml",
+        "Cargo.lock",
+    ],
+    LanguageType.GO: [
+        "go.mod",
+        "go.sum",
+    ],
+    LanguageType.JAVA: [
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+        "settings.gradle",
+    ],
+    LanguageType.CPP: [
+        "CMakeLists.txt",
+        "Makefile",
+        "BUILD.bazel",  # C++ Bazel projects
+    ],
+}
+```
+
+**Detection Algorithm:**
+```python
+def detect_language(workspace_path: Path) -> tuple[LanguageType, dict[str, bool]]:
+    """
+    Detect programming language from workspace structure.
+
+    Returns:
+        (detected_language, indicators_found)
+
+    Raises:
+        LibraryLoadError: If no language indicators found
+    """
+    indicators_found = {}
+    language_scores = {lang: 0 for lang in LanguageType}
+
+    for language, indicator_files in LANGUAGE_INDICATORS.items():
+        for indicator in indicator_files:
+            indicator_path = workspace_path / indicator
+            exists = indicator_path.exists()
+            indicators_found[indicator] = exists
+
+            if exists:
+                language_scores[language] += 1
+
+    # Find language with highest score
+    best_language = max(language_scores.items(), key=lambda x: x[1])
+
+    if best_language[1] == 0:
+        raise LibraryLoadError(
+            f"Unable to detect library language in {workspace_path}\n"
+            f"  Checked for: {', '.join(sum(LANGUAGE_INDICATORS.values(), []))}\n"
+            f"  Fix: Ensure workspace contains language indicator file"
+        )
+
+    return best_language[0], indicators_found
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/detection.py`
+- **Tests:**
+  - `tests/test_language_detection.py`
+  - Test cases for each language
+  - Test case for polyglot projects (should prefer primary language)
+  - Test case for unknown language (should raise LibraryLoadError)
+
+---
+
+## [Feature: Python Direct Bridge] <ull-feature-02>
+
+Direct import and introspection of Python libraries.
+
+**Capabilities:**
+1. Dynamic import using `importlib`
+2. Full signature introspection using `inspect` module
+3. Type hint validation
+4. Docstring extraction
+5. Zero subprocess overhead (runs in-process)
+
+**Implementation:**
+```python
+import importlib
+import inspect
+import sys
+from pathlib import Path
+from typing import Any, Dict
+
+class PythonBridge:
+    """Direct Python library loading with full introspection."""
+
+    def __init__(self, workspace_path: Path):
+        self.workspace_path = workspace_path
+        self.module = None
+        self.module_name = self._detect_module_name()
+
+    def _detect_module_name(self) -> str:
+        """Detect main module name from setup.py or pyproject.toml."""
+        # Parse setup.py or pyproject.toml to find package name
+        # Fallback: scan for __init__.py files
+        pass
+
+    def load(self) -> Any:
+        """Load Python module and return importable object."""
+        # Add workspace to sys.path
+        if str(self.workspace_path) not in sys.path:
+            sys.path.insert(0, str(self.workspace_path))
+
+        try:
+            self.module = importlib.import_module(self.module_name)
+            return self._create_proxy(self.module)
+        except ImportError as e:
+            raise LibraryLoadError(
+                f"Failed to import Python module '{self.module_name}'\n"
+                f"  Workspace: {self.workspace_path}\n"
+                f"  Error: {e}\n"
+                f"  Fix: Ensure module is importable (check __init__.py)"
+            )
+
+    def _create_proxy(self, module: Any) -> Any:
+        """Create proxy object with all public module functions."""
+        class ModuleProxy:
+            pass
+
+        proxy = ModuleProxy()
+
+        # Copy all public functions to proxy
+        for name in dir(module):
+            if not name.startswith('_'):
+                attr = getattr(module, name)
+                if callable(attr):
+                    setattr(proxy, name, attr)
+
+        return proxy
+
+    def get_signature(self, function_name: str) -> inspect.Signature:
+        """Get function signature for verification."""
+        if self.module is None:
+            raise LibraryLoadError("Module not loaded")
+
+        func = getattr(self.module, function_name, None)
+        if func is None:
+            raise InterfaceConformanceError(
+                f"Function '{function_name}' not found in module"
+            )
+
+        return inspect.signature(func)
+
+    def verify_signature(
+        self,
+        function_name: str,
+        expected_params: Dict[str, type],
+        expected_return: type
+    ) -> tuple[bool, List[str]]:
+        """
+        Verify function signature matches expected contract.
+
+        Returns:
+            (matches, mismatch_details)
+        """
+        sig = self.get_signature(function_name)
+        mismatches = []
+
+        # Check parameters
+        for param_name, param_type in expected_params.items():
+            if param_name not in sig.parameters:
+                mismatches.append(f"Missing parameter '{param_name}'")
+            else:
+                param = sig.parameters[param_name]
+                if param.annotation != inspect.Parameter.empty:
+                    if param.annotation != param_type:
+                        mismatches.append(
+                            f"Parameter '{param_name}' type mismatch: "
+                            f"expected {param_type}, found {param.annotation}"
+                        )
+
+        # Check return type
+        if sig.return_annotation != inspect.Signature.empty:
+            if sig.return_annotation != expected_return:
+                mismatches.append(
+                    f"Return type mismatch: "
+                    f"expected {expected_return}, found {sig.return_annotation}"
+                )
+
+        return len(mismatches) == 0, mismatches
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/bridges/python_bridge.py`
+- **Tests:**
+  - `tests/bridges/test_python_bridge.py`
+  - Test successful module loading
+  - Test signature verification (matches and mismatches)
+  - Test error handling (module not found, function not found)
+  - Test docstring extraction
+
+---
+
+## [Feature: Node.js Subprocess Bridge] <ull-feature-03>
+
+Node.js library loading via subprocess and JSON-RPC communication.
+
+**Capabilities:**
+1. Spawn Node.js subprocess with JSON-RPC server
+2. Call functions via JSON-RPC protocol
+3. Introspect signatures via TypeScript type definitions
+4. Handle async/Promise-based APIs
+5. Automatic subprocess lifecycle management
+
+**Architecture:**
+```
+Python Process                     Node.js Subprocess
+┌─────────────────┐               ┌──────────────────┐
+│ NodeBridge      │               │ JSON-RPC Server  │
+│                 │   stdio       │                  │
+│ - send_request()│ ──────────► │ - load library   │
+│ - recv_response()│ ◄────────── │ - call functions │
+│                 │               │ - return results │
+└─────────────────┘               └──────────────────┘
+```
+
+**JSON-RPC Protocol:**
+```json
+Request:
+{
+  "jsonrpc": "2.0",
+  "method": "call_function",
+  "params": {
+    "function_name": "createTask",
+    "args": {"title": "foo", "description": "bar"}
+  },
+  "id": 1
+}
+
+Response (success):
+{
+  "jsonrpc": "2.0",
+  "result": {"id": "task-123", "title": "foo", "description": "bar"},
+  "id": 1
+}
+
+Response (error):
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32601,
+    "message": "Function 'createTask' not found"
+  },
+  "id": 1
+}
+```
+
+**Implementation:**
+```python
+import subprocess
+import json
+from pathlib import Path
+from typing import Any, Dict
+
+class NodeBridge:
+    """Node.js library loading via subprocess + JSON-RPC."""
+
+    def __init__(self, workspace_path: Path):
+        self.workspace_path = workspace_path
+        self.process = None
+        self.request_id = 0
+
+    def load(self) -> Any:
+        """Start Node.js subprocess and return proxy object."""
+        # Create JSON-RPC server script
+        server_script = self._create_rpc_server()
+
+        # Start subprocess
+        self.process = subprocess.Popen(
+            ["node", str(server_script)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=str(self.workspace_path),
+            text=True,
+        )
+
+        # Wait for ready signal
+        ready_line = self.process.stdout.readline()
+        if "READY" not in ready_line:
+            raise LibraryLoadError(
+                f"Node.js subprocess failed to start\n"
+                f"  Error: {self.process.stderr.read()}"
+            )
+
+        return self._create_proxy()
+
+    def _create_rpc_server(self) -> Path:
+        """Generate temporary JSON-RPC server script."""
+        server_code = """
+        const lib = require('./index.js');  // Load main module
+
+        process.stdout.write('READY\\n');
+
+        // Read JSON-RPC requests from stdin
+        process.stdin.on('data', (data) => {
+            const request = JSON.parse(data);
+
+            if (request.method === 'call_function') {
+                const { function_name, args } = request.params;
+                const func = lib[function_name];
+
+                if (!func) {
+                    process.stdout.write(JSON.stringify({
+                        jsonrpc: '2.0',
+                        error: { code: -32601, message: `Function '${function_name}' not found` },
+                        id: request.id
+                    }) + '\\n');
+                    return;
+                }
+
+                try {
+                    const result = func(args);
+                    process.stdout.write(JSON.stringify({
+                        jsonrpc: '2.0',
+                        result: result,
+                        id: request.id
+                    }) + '\\n');
+                } catch (error) {
+                    process.stdout.write(JSON.stringify({
+                        jsonrpc: '2.0',
+                        error: { code: -32603, message: error.message },
+                        id: request.id
+                    }) + '\\n');
+                }
+            }
+        });
+        """
+
+        server_path = self.workspace_path / ".adc_rpc_server.js"
+        server_path.write_text(server_code)
+        return server_path
+
+    def _create_proxy(self) -> Any:
+        """Create proxy object that forwards calls to Node.js."""
+        bridge = self
+
+        class NodeProxy:
+            def __getattr__(self, name):
+                def call_function(**kwargs):
+                    return bridge._call_function(name, kwargs)
+                return call_function
+
+        return NodeProxy()
+
+    def _call_function(self, function_name: str, args: Dict[str, Any]) -> Any:
+        """Call Node.js function via JSON-RPC."""
+        self.request_id += 1
+
+        request = {
+            "jsonrpc": "2.0",
+            "method": "call_function",
+            "params": {
+                "function_name": function_name,
+                "args": args
+            },
+            "id": self.request_id
+        }
+
+        # Send request
+        self.process.stdin.write(json.dumps(request) + "\n")
+        self.process.stdin.flush()
+
+        # Read response
+        response_line = self.process.stdout.readline()
+        response = json.loads(response_line)
+
+        if "error" in response:
+            raise InterfaceConformanceError(
+                f"Node.js function call failed: {response['error']['message']}"
+            )
+
+        return response["result"]
+
+    def __del__(self):
+        """Cleanup subprocess on deletion."""
+        if self.process:
+            self.process.terminate()
+            self.process.wait()
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/bridges/node_bridge.py`
+- **Tests:**
+  - `tests/bridges/test_node_bridge.py`
+  - Test subprocess startup and communication
+  - Test function calls (success and error cases)
+  - Test subprocess cleanup
+  - Test TypeScript type introspection (if .d.ts files available)
+
+---
+
+## [Feature: CLI Fallback Bridge] <ull-feature-04>
+
+Generic CLI execution for languages without native Python bindings.
+
+**Capabilities:**
+1. Detect CLI interface (`--help`, command introspection)
+2. Execute commands and capture output
+3. Verify commands exist (basic interface verification)
+4. Document limitations (cannot verify type signatures)
+
+**What CLI Can Verify:**
+- Command exists and is executable
+- Basic output format (stdout/stderr)
+- Help text presence
+- Exit codes
+
+**What CLI Cannot Verify:**
+- Type signatures
+- Parameter annotations
+- Return types
+- Docstring compliance
+
+**Implementation:**
+```python
+import subprocess
+from pathlib import Path
+from typing import List, Dict, Any
+
+class CliFallbackBridge:
+    """CLI-based verification for compiled languages (Phase 1)."""
+
+    def __init__(self, workspace_path: Path):
+        self.workspace_path = workspace_path
+        self.cli_executable = self._detect_cli_executable()
+
+    def _detect_cli_executable(self) -> Path:
+        """Find CLI executable in workspace."""
+        # Common locations: bin/, build/, target/release/, dist/
+        search_dirs = [
+            self.workspace_path / "bin",
+            self.workspace_path / "build",
+            self.workspace_path / "target" / "release",  # Rust
+            self.workspace_path / "dist",
+        ]
+
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                # Find executable files
+                for file in search_dir.iterdir():
+                    if file.is_file() and file.stat().st_mode & 0o111:  # Executable
+                        return file
+
+        raise LibraryLoadError(
+            f"No CLI executable found in {self.workspace_path}\n"
+            f"  Searched: {', '.join(str(d) for d in search_dirs)}\n"
+            f"  Fix: Build your project first, or implement Python bindings"
+        )
+
+    def verify_commands_exist(self, required_commands: List[str]) -> Dict[str, bool]:
+        """
+        Verify that required CLI commands exist.
+
+        This is LIMITED verification - we can only check if commands exist,
+        not their signatures or types.
+        """
+        results = {}
+
+        for command in required_commands:
+            try:
+                # Try running: <executable> <command> --help
+                result = subprocess.run(
+                    [str(self.cli_executable), command, "--help"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+
+                # Command exists if exit code is 0 or help text present
+                results[command] = (
+                    result.returncode == 0
+                    or "usage" in result.stdout.lower()
+                    or "help" in result.stdout.lower()
+                )
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                results[command] = False
+
+        return results
+
+    def load(self) -> Any:
+        """
+        Create proxy for CLI execution.
+
+        Note: This does NOT provide signature verification.
+        Use only for basic command existence checks.
+        """
+        bridge = self
+
+        class CliProxy:
+            def __getattr__(self, name):
+                def call_command(*args, **kwargs):
+                    # Convert to CLI arguments
+                    cli_args = [str(bridge.cli_executable), name]
+                    for k, v in kwargs.items():
+                        cli_args.extend([f"--{k}", str(v)])
+
+                    result = subprocess.run(
+                        cli_args,
+                        capture_output=True,
+                        text=True,
+                        cwd=str(bridge.workspace_path),
+                    )
+
+                    if result.returncode != 0:
+                        raise InterfaceConformanceError(
+                            f"CLI command failed: {name}\n"
+                            f"  Error: {result.stderr}"
+                        )
+
+                    return result.stdout
+
+                return call_command
+
+        return CliProxy()
+```
+
+**Limitations Documentation:**
+```python
+CLI_VERIFICATION_LIMITATIONS = """
+CLI Fallback Bridge Limitations:
+
+✅ CAN VERIFY:
+- Command exists and is executable
+- Basic output format
+- Help text presence
+- Exit codes
+
+❌ CANNOT VERIFY:
+- Type signatures
+- Parameter annotations
+- Return types
+- Docstring compliance
+
+RECOMMENDATION: Implement Python bindings for full verification.
+See Phase 2 contracts for Go/Rust/Java binding generation.
+"""
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/bridges/cli_fallback.py`
+- **Tests:**
+  - `tests/bridges/test_cli_fallback.py`
+  - Test CLI detection for Rust/Go/Java projects
+  - Test command existence verification
+  - Test error handling (no executable found)
+  - Document verification limitations
+
+---
+
+## [Feature: ADC Marker Verification] <ull-feature-05>
+
+Grep-based verification of ADC-IMPLEMENTS markers (required for all languages).
+
+**Purpose:** Link source code to contract blocks for compliance auditing.
+
+**Marker Format:**
+```
+# ADC-IMPLEMENTS: <block-id>
+```
+
+**Example:**
+```python
+# ADC-IMPLEMENTS: <task-manager-create-01>
+def create_task(title: str, description: str) -> Task:
+    """Create new task."""
+    pass
+```
+
+**Verification Algorithm:**
+```python
+import subprocess
+from pathlib import Path
+from typing import List, Set
+
+class MarkerVerifier:
+    """Verify ADC-IMPLEMENTS markers via grep."""
+
+    def __init__(self, workspace_path: Path):
+        self.workspace_path = workspace_path
+
+    def find_markers(self, file_extensions: List[str] = None) -> Set[str]:
+        """
+        Find all ADC-IMPLEMENTS markers in workspace.
+
+        Args:
+            file_extensions: File types to search (e.g., [".py", ".js"])
+                            If None, search all text files
+
+        Returns:
+            Set of block IDs found in markers
+        """
+        # Use ripgrep (rg) for fast searching
+        # Pattern: ADC-IMPLEMENTS:\s*<([^>]+)>
+
+        cmd = [
+            "rg",
+            "--no-heading",
+            "--no-filename",
+            r"ADC-IMPLEMENTS:\s*<([^>]+)>",
+            "--only-matching",
+            "--replace", "$1",  # Extract only block ID
+            str(self.workspace_path),
+        ]
+
+        if file_extensions:
+            for ext in file_extensions:
+                cmd.extend(["--glob", f"*{ext}"])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            # Parse output (one block ID per line)
+            markers = set(result.stdout.strip().split("\n"))
+            markers.discard("")  # Remove empty strings
+
+            return markers
+        except subprocess.TimeoutExpired:
+            raise LibraryLoadError(
+                f"Marker search timed out after 10 seconds\n"
+                f"  Workspace: {self.workspace_path}\n"
+                f"  Fix: Reduce workspace size or install ripgrep (rg)"
+            )
+        except FileNotFoundError:
+            # Fallback to grep if rg not available
+            return self._find_markers_with_grep(file_extensions)
+
+    def _find_markers_with_grep(self, file_extensions: List[str] = None) -> Set[str]:
+        """Fallback to grep if ripgrep not available."""
+        # Similar logic with grep instead of rg
+        pass
+
+    def verify_coverage(
+        self,
+        required_block_ids: Set[str],
+        found_markers: Set[str]
+    ) -> tuple[bool, Set[str]]:
+        """
+        Verify that all required contract blocks have markers.
+
+        Returns:
+            (is_complete, missing_block_ids)
+        """
+        missing = required_block_ids - found_markers
+        return len(missing) == 0, missing
+```
+
+**Token Cost:**
+- Running grep/rg: ~100 tokens (command execution)
+- Parsing results: ~200 tokens
+- Verification logic: ~200 tokens
+- **Total: ~500 tokens per audit (unavoidable)**
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/marker_verifier.py`
+- **Tests:**
+  - `tests/test_marker_verifier.py`
+  - Test marker detection in Python files
+  - Test marker detection in multi-language projects
+  - Test coverage verification (complete and incomplete)
+  - Test fallback to grep when rg unavailable
+
+---
+
+## [Feature: Universal Load Function] <ull-feature-06>
+
+Main entry point that orchestrates language detection, bridge selection, and proxy creation.
+
+**User-Facing API:**
+```python
+from adc.library_loader import load_library
+from pathlib import Path
+
+def load_library(
+    workspace_path: str | Path,
+    expected_language: str = None,
+    fail_on_limited_verification: bool = False
+) -> tuple[Any, LibraryMetadata]:
+    """
+    Load library from any language and return introspectable Python object.
+
+    Args:
+        workspace_path: Path to workspace containing library
+        expected_language: Force specific language (skip detection)
+        fail_on_limited_verification: Raise error if only CLI fallback available
+
+    Returns:
+        (library_proxy, metadata)
+
+        library_proxy: Python object with library functions as methods
+        metadata: LibraryMetadata with verification capabilities
+
+    Raises:
+        LibraryLoadError: If library cannot be loaded
+        InterfaceConformanceError: If expected_language doesn't match detected
+
+    Example:
+        lib, meta = load_library("./workspace")
+
+        # Use library
+        result = lib.create_task(title="foo", description="bar")
+
+        # Check verification capabilities
+        if meta.supports_signature_verification:
+            import inspect
+            sig = inspect.signature(lib.create_task)
+            print(f"Signature: {sig}")
+    """
+    workspace_path = Path(workspace_path)
+
+    # 1. Detect language
+    if expected_language:
+        detected_language = LanguageType(expected_language)
+        indicators_found = {}
+    else:
+        detected_language, indicators_found = detect_language(workspace_path)
+
+    # 2. Select bridge
+    bridge_type, bridge = _select_bridge(detected_language, workspace_path)
+
+    # 3. Load library
+    start_time = time.time()
+    try:
+        library_proxy = bridge.load()
+        load_time_ms = (time.time() - start_time) * 1000
+        load_errors = []
+    except Exception as e:
+        load_time_ms = (time.time() - start_time) * 1000
+        load_errors = [str(e)]
+        raise
+
+    # 4. Create metadata
+    metadata = LibraryMetadata(
+        workspace_path=str(workspace_path),
+        detected_language=detected_language,
+        bridge_type=bridge_type,
+        language_indicators=indicators_found,
+        supports_signature_verification=bridge_type in [
+            BridgeType.PYTHON_DIRECT,
+            BridgeType.NODEJS_SUBPROCESS,
+        ],
+        supports_type_introspection=bridge_type in [
+            BridgeType.PYTHON_DIRECT,
+            BridgeType.NODEJS_SUBPROCESS,
+        ],
+        supports_docstring_verification=bridge_type == BridgeType.PYTHON_DIRECT,
+        load_time_ms=load_time_ms,
+        load_errors=load_errors,
+    )
+
+    # 5. Fail if limited verification and flag set
+    if fail_on_limited_verification and not metadata.supports_signature_verification:
+        raise LibraryLoadError(
+            f"Library only supports LIMITED verification (CLI fallback)\n"
+            f"  Language: {detected_language.value}\n"
+            f"  Bridge: {bridge_type.value}\n"
+            f"  Fix: Implement Python bindings for full verification\n"
+            f"  See: contracts/universal-library-loader/002-phase2-bindings.qmd"
+        )
+
+    return library_proxy, metadata
+
+
+def _select_bridge(language: LanguageType, workspace: Path) -> tuple[BridgeType, Any]:
+    """Select appropriate bridge for language."""
+    if language == LanguageType.PYTHON:
+        return BridgeType.PYTHON_DIRECT, PythonBridge(workspace)
+    elif language == LanguageType.NODEJS:
+        return BridgeType.NODEJS_SUBPROCESS, NodeBridge(workspace)
+    else:
+        # CLI fallback for all other languages (Phase 1)
+        return BridgeType.CLI_FALLBACK, CliFallbackBridge(workspace)
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/__init__.py`
+- **Tests:**
+  - `tests/test_load_library.py`
+  - Test loading Python libraries
+  - Test loading Node.js libraries
+  - Test CLI fallback for Go/Rust
+  - Test error handling (workspace not found, no indicators)
+  - Test metadata accuracy
+
+---
+
+## [Tool: Contract Interface Extractor] <ull-tool-01>
+
+Tool to extract expected interface from ADC contract for verification.
+
+**Purpose:** Parse ADC contract to extract required functions, signatures, and block IDs for verification.
+
+**Input:** ADC contract file (`.qmd` format)
+
+**Output:** Expected interface specification
+
+```python
+from dataclasses import dataclass
+from typing import Dict, List, Set
+from pathlib import Path
+
+@dataclass
+class ExpectedInterface:
+    """Expected interface extracted from ADC contract."""
+
+    contract_id: str
+
+    # Functions and their signatures
+    required_functions: Dict[str, "FunctionSignature"]
+
+    # Block IDs that must have ADC-IMPLEMENTS markers
+    required_block_ids: Set[str]
+
+    # Optional: expected docstrings
+    expected_docstrings: Dict[str, str]
+
+@dataclass
+class FunctionSignature:
+    """Expected function signature."""
+
+    name: str
+    parameters: Dict[str, type]  # {param_name: param_type}
+    return_type: type
+    is_required: bool
+
+class ContractInterfaceExtractor:
+    """Extract expected interface from ADC contract."""
+
+    def extract(self, contract_path: Path) -> ExpectedInterface:
+        """
+        Parse contract and extract interface specification.
+
+        Looks for:
+        - [APIEndpoint] blocks with function signatures
+        - [Feature] blocks with method specifications
+        - [DataModel] blocks for type definitions
+        - Block IDs for marker verification
+        """
+        contract_text = contract_path.read_text()
+
+        # Parse contract blocks
+        required_functions = self._extract_functions(contract_text)
+        required_block_ids = self._extract_block_ids(contract_text)
+
+        # Extract contract ID from YAML front matter
+        contract_id = self._extract_contract_id(contract_text)
+
+        return ExpectedInterface(
+            contract_id=contract_id,
+            required_functions=required_functions,
+            required_block_ids=required_block_ids,
+            expected_docstrings={},
+        )
+
+    def _extract_functions(self, contract_text: str) -> Dict[str, FunctionSignature]:
+        """Extract function signatures from contract blocks."""
+        # Parse [APIEndpoint] and [Feature] blocks
+        # Extract function signatures from code examples
+        pass
+
+    def _extract_block_ids(self, contract_text: str) -> Set[str]:
+        """Extract all block IDs from contract."""
+        # Pattern: <block-id> at end of block headers
+        import re
+        pattern = r'<([^>]+)>'
+        matches = re.findall(pattern, contract_text)
+        return set(matches)
+
+    def _extract_contract_id(self, contract_text: str) -> str:
+        """Extract contract_id from YAML front matter."""
+        # Parse YAML between --- markers
+        import re
+        yaml_match = re.search(r'^---\n(.*?)\n---', contract_text, re.DOTALL | re.MULTILINE)
+        if yaml_match:
+            yaml_text = yaml_match.group(1)
+            id_match = re.search(r'contract_id:\s*(.+)', yaml_text)
+            if id_match:
+                return id_match.group(1).strip()
+
+        raise LibraryLoadError(f"Could not find contract_id in contract")
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/contract_extractor.py`
+- **Tests:**
+  - `tests/test_contract_extractor.py`
+  - Test extraction from sample ADC contracts
+  - Test block ID extraction
+  - Test function signature parsing
+
+---
+
+## [Algorithm: Full Verification Workflow] <ull-algo-01>
+
+Complete algorithm for verifying library compliance against ADC contract.
+
+**Inputs:**
+- `contract_path: Path` - ADC contract file
+- `workspace_path: Path` - Implementation workspace
+
+**Algorithm:**
+```
+1. EXTRACT EXPECTED INTERFACE
+   - Parse contract to get required functions and block IDs
+   - Create ExpectedInterface object
+
+2. LOAD LIBRARY
+   - Call load_library(workspace_path)
+   - Get library_proxy and metadata
+   - Record verification capabilities
+
+3. VERIFY FUNCTION EXISTENCE
+   - For each required function:
+     * Check if function exists in library_proxy
+     * Record missing functions
+
+4. VERIFY SIGNATURES (if supported)
+   - If metadata.supports_signature_verification:
+     * For each required function:
+       - Get actual signature via inspect.signature()
+       - Compare to expected signature
+       - Record mismatches with details
+   - Else:
+     * Skip signature verification
+     * Add warning: "Limited verification - signatures not checked"
+
+5. VERIFY ADC MARKERS
+   - Call MarkerVerifier.find_markers(workspace_path)
+   - Compare found markers to required_block_ids
+   - Record missing markers
+
+6. CALCULATE COMPLIANCE
+   - Create VerificationResult object
+   - Calculate compliance_score
+   - Determine is_passing status
+
+7. RETURN RESULT
+   - Return VerificationResult with all findings
+```
+
+**Outputs:**
+- `VerificationResult` - Complete verification report
+
+**Performance:**
+- Total time: <3 seconds
+- Token usage: 1,600-2,100 tokens (vs 42,600 current)
+- **Savings: 95-96% reduction**
+
+**Parity:**
+- **Implementation Scope:** `src/adc/library_loader/verifier.py`
+- **Tests:**
+  - `tests/test_verifier.py`
+  - Test full workflow on Python library
+  - Test full workflow on Node.js library
+  - Test CLI fallback workflow on Rust library
+  - Measure token usage and performance
+
+---
+
+## [Integration: Auditor Integration] <ull-integration-01>
+
+Integration with ADC compliance auditor for token-efficient verification.
+
+**Current Auditor Behavior:**
+```python
+# BEFORE: Read all files (42,600 tokens)
+def verify_compliance(contract_path, workspace_path):
+    # Read all Python files
+    files = glob(f"{workspace_path}/**/*.py")
+    file_contents = [read_file(f) for f in files]  # 40,000+ tokens
+
+    # Parse and verify
+    # ... verification logic ...
+
+    return compliance_report
+```
+
+**New Auditor Behavior:**
+```python
+# AFTER: Use library loader (1,600 tokens)
+from adc.library_loader import load_library
+from adc.library_loader.contract_extractor import ContractInterfaceExtractor
+from adc.library_loader.verifier import verify_compliance
+
+def verify_compliance(contract_path, workspace_path):
+    # Extract expected interface (200 tokens)
+    extractor = ContractInterfaceExtractor()
+    expected = extractor.extract(contract_path)
+
+    # Load library (100-500ms, 0 tokens - runs locally)
+    library, metadata = load_library(workspace_path)
+
+    # Verify compliance (1,400 tokens)
+    result = verify_compliance(expected, library, metadata, workspace_path)
+
+    # Generate report (200 tokens)
+    return format_compliance_report(result)
+```
+
+**Token Savings Breakdown:**
+- Before: 42,600 tokens
+- After: 200 + 1,400 + 200 = 1,800 tokens
+- **Savings: 40,800 tokens (96% reduction)**
+
+**Integration Steps:**
+1. Import library loader in auditor
+2. Replace file reading with library loading
+3. Use verification result instead of parsing source
+4. Maintain same compliance scoring logic
+5. Generate same format reports
+
+**Parity:**
+- **Implementation Scope:** Update existing auditor at `src/adc/agents/compliance_auditor.py`
+- **Tests:**
+  - Run auditor on sample projects before/after
+  - Verify compliance scores match
+  - Measure token reduction
+  - Confirm no functionality regression
+
+---
+
+## [TestScenario: Python Library Verification] <ull-test-01>
+
+**Scenario:** Verify token efficiency on Python todo-list implementation.
+
+**Setup:**
+1. Create sample contract: `todo-list-adc-001.qmd`
+2. Implement in Python: `workspace/todo_list.py`
+3. Add ADC-IMPLEMENTS markers to source
+4. Run verification with library loader
+
+**Expected Interface (from contract):**
+```python
+@dataclass
+class Task:
+    id: str
+    title: str
+    description: str
+    completed: bool
+
+def create_task(title: str, description: str) -> Task: ...
+def list_tasks() -> List[Task]: ...
+def complete_task(task_id: str) -> Task: ...
+def delete_task(task_id: str) -> None: ...
+```
+
+**Verification Steps:**
+```python
+from adc.library_loader import load_library
+from adc.library_loader.contract_extractor import ContractInterfaceExtractor
+from adc.library_loader.verifier import verify_compliance
+
+# 1. Extract expected interface
+extractor = ContractInterfaceExtractor()
+expected = extractor.extract("todo-list-adc-001.qmd")
+
+# 2. Load library
+lib, metadata = load_library("./workspace")
+
+# 3. Verify
+result = verify_compliance(expected, lib, metadata, "./workspace")
+
+# 4. Assert
+assert result.is_passing
+assert result.compliance_score >= 0.95
+assert len(result.required_functions_missing) == 0
+assert len(result.adc_implements_markers_missing) == 0
+```
+
+**Expected Results:**
+- Verification completes in <500ms
+- Token usage: ~1,600 tokens
+- All functions found: create_task, list_tasks, complete_task, delete_task
+- All signatures match contract
+- All ADC-IMPLEMENTS markers present
+- Compliance score: 1.0
+
+**Measurements:**
+- Time: <500ms
+- Tokens: ~1,600
+- vs Current: 42,600 tokens, 5-10 seconds
+- **Savings: 96% tokens, 90% time**
+
+**Parity:**
+- **Implementation Scope:** `tests/integration/test_python_verification.py`
+- **Fixtures:** Sample contract and implementation in `tests/fixtures/`
+
+---
+
+## [TestScenario: Node.js Library Verification] <ull-test-02>
+
+**Scenario:** Verify Node.js REST API implementation with TypeScript types.
+
+**Setup:**
+1. Contract: `rest-api-adc-001.qmd`
+2. Implementation: `workspace/src/api.ts` (TypeScript)
+3. Build: `npm run build` → `dist/api.js`
+4. Run verification
+
+**Expected Interface:**
+```typescript
+interface ApiResponse {
+    status: number;
+    data: any;
+}
+
+function createEndpoint(path: string, handler: Function): ApiResponse
+function registerRoute(method: string, path: string): void
+function startServer(port: number): void
+```
+
+**Verification:**
+```python
+# Load Node.js library
+lib, metadata = load_library("./workspace", expected_language="nodejs")
+
+# Check metadata
+assert metadata.detected_language == LanguageType.NODEJS
+assert metadata.bridge_type == BridgeType.NODEJS_SUBPROCESS
+assert metadata.supports_signature_verification == True
+
+# Verify functions exist
+assert hasattr(lib, 'createEndpoint')
+assert hasattr(lib, 'registerRoute')
+assert hasattr(lib, 'startServer')
+
+# Call function (verify it works)
+response = lib.createEndpoint(path="/test", handler=lambda: {"ok": True})
+assert isinstance(response, dict)
+```
+
+**Expected Results:**
+- Subprocess starts successfully in <500ms
+- JSON-RPC communication works
+- Functions callable from Python
+- Token usage: ~1,600 tokens
+- **Savings: 96% vs reading TypeScript source**
+
+**Parity:**
+- **Implementation Scope:** `tests/integration/test_nodejs_verification.py`
+- **Fixtures:** Sample Node.js/TypeScript project in `tests/fixtures/nodejs-api/`
+
+---
+
+## [TestScenario: Rust CLI Fallback Verification] <ull-test-03>
+
+**Scenario:** Verify Rust CLI tool with LIMITED verification (Phase 1).
+
+**Setup:**
+1. Contract: `rust-cli-adc-001.qmd`
+2. Implementation: Rust project with CLI interface
+3. Build: `cargo build --release` → `target/release/mycli`
+4. Run verification with CLI fallback
+
+**Expected Commands:**
+```
+mycli create --title "foo" --description "bar"
+mycli list
+mycli complete --id "task-123"
+mycli delete --id "task-123"
+```
+
+**Verification:**
+```python
+# Load with CLI fallback
+lib, metadata = load_library("./workspace", expected_language="rust")
+
+# Check metadata
+assert metadata.detected_language == LanguageType.RUST
+assert metadata.bridge_type == BridgeType.CLI_FALLBACK
+assert metadata.supports_signature_verification == False  # LIMITED
+
+# Verify commands exist (CLI fallback capability)
+cli_bridge = CliFallbackBridge(Path("./workspace"))
+commands_found = cli_bridge.verify_commands_exist([
+    "create", "list", "complete", "delete"
+])
+
+assert all(commands_found.values())
+
+# Verify markers still work
+verifier = MarkerVerifier(Path("./workspace"))
+markers = verifier.find_markers([".rs"])
+assert "rust-cli-create-01" in markers
+```
+
+**Expected Results:**
+- CLI executable found in `target/release/`
+- All commands exist and respond to `--help`
+- ADC-IMPLEMENTS markers found in Rust source
+- Token usage: ~1,000 tokens (CLI cheaper than library loading)
+- **Savings: 98% vs reading Rust source**
+- **Limitation documented:** No signature verification available
+
+**Parity:**
+- **Implementation Scope:** `tests/integration/test_rust_cli_verification.py`
+- **Fixtures:** Sample Rust CLI project in `tests/fixtures/rust-cli/`
+
+---
+
+## [TestScenario: Token Usage Measurement] <ull-test-04>
+
+**Scenario:** Measure actual token usage and compare to file reading.
+
+**Methodology:**
+1. Select 5 diverse projects (Python, Node.js, Rust, Go, mixed)
+2. Run verification with library loader
+3. Run verification with file reading (current approach)
+4. Compare token usage and time
+
+**Test Projects:**
+1. **Python todo-list** (~500 LOC)
+2. **Node.js REST API** (~800 LOC TypeScript)
+3. **Rust CLI tool** (~1200 LOC)
+4. **Go microservice** (~2000 LOC)
+5. **Mixed Bazel project** (~3000 LOC multiple languages)
+
+**Measurements:**
+```python
+import anthropic
+from adc.library_loader import load_library
+
+def measure_token_usage(project_path):
+    """Measure tokens for library loading approach."""
+    client = anthropic.Anthropic()
+
+    # Approach 1: Library Loading
+    lib, metadata = load_library(project_path)
+    result = verify_compliance(expected, lib, metadata, project_path)
+
+    # Count tokens from result
+    tokens_library_loading = count_tokens(str(result))
+
+    # Approach 2: File Reading (current)
+    files = glob(f"{project_path}/**/*.py")
+    all_content = "\n".join(read_file(f) for f in files)
+    tokens_file_reading = count_tokens(all_content)
+
+    return {
+        "library_loading": tokens_library_loading,
+        "file_reading": tokens_file_reading,
+        "savings_pct": (1 - tokens_library_loading / tokens_file_reading) * 100,
+    }
+
+# Run on all projects
+results = [measure_token_usage(p) for p in test_projects]
+
+# Aggregate
+avg_savings = sum(r["savings_pct"] for r in results) / len(results)
+assert avg_savings >= 95, "Expected 95%+ token savings"
+```
+
+**Expected Results:**
+
+| Project | File Reading | Library Loading | Savings |
+|---------|-------------|-----------------|---------|
+| Python todo | 42,600 | 1,800 | 95.8% |
+| Node.js API | 56,000 | 1,900 | 96.6% |
+| Rust CLI | 38,000 | 1,000 | 97.4% |
+| Go service | 72,000 | 1,200 | 98.3% |
+| Mixed Bazel | 105,000 | 2,500 | 97.6% |
+| **Average** | **62,720** | **1,680** | **97.3%** |
+
+**Success Criteria:**
+- Average savings ≥95%
+- All projects <3 seconds verification time
+- No false negatives (all compliant projects pass)
+- Clear errors for non-compliant projects
+
+**Parity:**
+- **Implementation Scope:** `tests/performance/test_token_measurement.py`
+- **Benchmarks:** Results documented in `docs/token-efficiency-benchmarks.md`
+
+---
+
+## [Constraint: Phase 2 Extension Path] <ull-constraint-03>
+
+**Phase 2 Scope (Future Contract):**
+
+When Phase 1 proves value (96% token savings), extend to full verification for compiled languages:
+
+**Go Bindings (ctypes):**
+```bash
+# Build shared library
+go build -buildmode=c-shared -o libmylib.so
+
+# Load in Python
+from ctypes import CDLL
+lib = CDLL("./libmylib.so")
+```
+
+**Rust Bindings (PyO3):**
+```rust
+use pyo3::prelude::*;
+
+#[pyfunction]
+fn create_task(title: String, description: String) -> PyResult<Task> {
+    // Rust implementation
+}
+
+#[pymodule]
+fn mylib(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(create_task, m)?)?;
+    Ok(())
+}
+```
+
+**Java Bindings (Jep):**
+```python
+from jep import Jep
+
+with Jep() as jep:
+    jep.eval("import com.example.MyLib")
+    result = jep.invoke("com.example.MyLib.createTask", ["foo", "bar"])
+```
+
+**Phase 2 Benefits:**
+- Full signature verification for ALL languages
+- Same token efficiency as Python (96% savings)
+- No CLI limitations
+
+**Phase 2 Requirements:**
+- Developers must generate bindings as part of build
+- ADC contracts specify binding generation commands
+- Clear documentation of binding setup process
+
+**Parity:**
+- **Future Contract:** `contracts/universal-library-loader/002-phase2-bindings.qmd`
+- **Documentation:** `docs/phase2-binding-guide.md`
+
+---
+
+## [Parity: Implementation Files] <ull-parity-01>
+
+**Directory Structure:**
+```
+src/adc/library_loader/
+  __init__.py                      # Main load_library() entry point
+  metadata.py                       # LibraryMetadata, LanguageType, BridgeType
+  verification.py                   # VerificationResult, SignatureMismatch
+  detection.py                      # Language detection logic
+  contract_extractor.py             # Extract interface from ADC contracts
+  verifier.py                       # Full verification workflow
+  marker_verifier.py                # ADC-IMPLEMENTS marker verification
+
+  bridges/
+    __init__.py
+    python_bridge.py                # Direct Python import + inspect
+    node_bridge.py                  # Node.js subprocess + JSON-RPC
+    cli_fallback.py                 # Generic CLI execution (Phase 1)
+
+    # Phase 2 (future)
+    go_bridge.py                    # Go ctypes bindings
+    rust_bridge.py                  # Rust PyO3 bindings
+    java_bridge.py                  # Java JNI/Jep bindings
+
+tests/
+  test_library_metadata.py
+  test_verification_result.py
+  test_language_detection.py
+  test_contract_extractor.py
+  test_verifier.py
+  test_marker_verifier.py
+
+  bridges/
+    test_python_bridge.py
+    test_node_bridge.py
+    test_cli_fallback.py
+
+  integration/
+    test_python_verification.py     # End-to-end Python test
+    test_nodejs_verification.py     # End-to-end Node.js test
+    test_rust_cli_verification.py   # End-to-end Rust test
+
+  performance/
+    test_token_measurement.py       # Token efficiency benchmarks
+
+  fixtures/
+    python-todo/                    # Sample Python project
+    nodejs-api/                     # Sample Node.js project
+    rust-cli/                       # Sample Rust project
+
+docs/
+  token-efficiency-benchmarks.md    # Performance measurements
+  phase2-binding-guide.md           # Future: How to add bindings
+  verification-capabilities.md      # What can be verified per language
+```
+
+**Implementation Phases:**
+
+**Phase 1A: Core Infrastructure (Week 1)**
+- LibraryMetadata, VerificationResult models
+- Language detection
+- PythonBridge implementation
+- MarkerVerifier implementation
+- Tests for above
+
+**Phase 1B: Node.js Support (Week 2)**
+- NodeBridge with JSON-RPC
+- Subprocess management
+- Tests for Node.js bridge
+
+**Phase 1C: CLI Fallback (Week 3)**
+- CliFallbackBridge for Rust/Go/Java
+- CLI detection and execution
+- Tests for CLI fallback
+
+**Phase 1D: Integration (Week 4)**
+- ContractInterfaceExtractor
+- Full verification workflow
+- Auditor integration
+- End-to-end tests
+
+**Phase 1E: Validation (Week 5)**
+- Token usage benchmarks
+- Performance testing
+- Documentation
+- Production readiness
+
+**Phase 2 (Future):**
+- Go/Rust/Java native bindings (deferred based on Phase 1 results)
+
+---
+
+## [Parity: Success Metrics] <ull-parity-02>
+
+**Token Efficiency Targets:**
+- Python verification: <2,000 tokens (vs 42,600 current)
+- Node.js verification: <2,000 tokens (vs 45,000+ current)
+- Rust/Go/Java CLI: <1,200 tokens (vs 40,000+ current)
+- **Overall: 96%+ token reduction**
+
+**Performance Targets:**
+- Library load time: <500ms (Python/Node.js)
+- CLI detection: <200ms
+- Marker verification: <2 seconds (1000 files)
+- Total verification: <3 seconds
+
+**Functional Requirements:**
+- Zero false negatives (compliant projects must pass)
+- Clear error messages for non-compliance
+- All languages supported (even if limited verification)
+- Auditor integration seamless
+
+**Quality Requirements:**
+- 90%+ test coverage
+- All error paths tested
+- Documentation complete
+- Examples for each language
+
+**Adoption Metrics:**
+- Auditor uses library loader for all verifications
+- 96% token reduction achieved in production
+- 48-task benchmark cost: $18.42 → $0.69
+- Developer feedback: "Easy to use, clear errors"
+
+**Monitoring:**
+- Track token usage per verification
+- Monitor library load times
+- Alert if token usage >3,000 (degradation)
+- Report savings in benchmark summaries

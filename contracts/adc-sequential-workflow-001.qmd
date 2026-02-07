@@ -1,0 +1,1048 @@
+---
+contract_id: "adc-sequential-workflow-001"
+title: "Sequential Agent Workflow with Nested Loops - Orchestrator Overhead Elimination"
+author: "ADC Framework"
+status: "proposed"
+version: 1.0
+created_date: "2025-12-16"
+last_updated: "2025-12-16"
+---
+
+### [Rationale: Eliminating Orchestrator Overhead] <sequential-workflow-rationale-01>
+
+The current ADC orchestrator pattern incurs significant token overhead by maintaining a single parent context that accumulates all agent responses. With full contract context (100K tokens) and full code context (200K tokens) passed to each agent, a typical workflow consumes 15.1M tokens at $10.02/task.
+
+This contract specifies a sequential agent workflow with nested loops that eliminates orchestrator overhead through two key innovations:
+
+1. **Context Summarization**: Agents receive summarized context (10-20K tokens) instead of full context (100-300K tokens), reducing per-agent overhead by 85-90%.
+2. **Sequential Invocation**: Agents execute directly in sequence without a coordinating orchestrator, eliminating parent context accumulation.
+
+The workflow implements a two-level loop architecture:
+- **Inner Loop**: Auditor ↔ Code Generator (implementation refinement until compliance >= 0.8)
+- **Outer Loop**: Evaluator → Refiner → Auditor (contract refinement until tests pass)
+
+**Expected Impact:**
+- Token reduction: 47-53% (from 15.1M to 6-8M tokens per task)
+- Cost reduction: 50%+ (from $10.02 to $4-5 per task)
+- Maintained success rate: 91.5%+ (same as orchestrator pattern)
+
+### [Implementation: Sequential Execution Architecture] <sequential-workflow-impl-01>
+
+The sequential workflow replaces the centralized orchestrator with a state machine that directly invokes agents in sequence. Each agent receives summarized context appropriate to its role, and state transitions are driven by explicit exit conditions rather than orchestrator decisions.
+
+**Key Design Principles:**
+1. **No Optional Types**: All state fields have sensible defaults; status communicated through result objects
+2. **Functional Composition**: Agents compose through pure data transformations without side effects
+3. **Explicit Exit Conditions**: Loop termination based on measurable criteria (compliance score, test pass rate)
+4. **Stateless Agents**: Each agent invocation is independent; state persisted only in workflow controller
+5. **Summary-First Design**: Context summarization happens once and is reused across loop iterations
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/sequential_workflow.py`
+- **Configuration Scope:** `config/workflows/sequential.yaml`
+- **Tests:**
+  - `tests/workflows/test_sequential_workflow.py`
+  - `tests/workflows/test_loop_control.py`
+  - `tests/workflows/test_context_summarization.py`
+
+### [Agent: SequentialWorkflowController] <sequential-workflow-agent-01>
+
+The workflow controller manages sequential agent execution with nested loop control and context summarization.
+
+**Persona:**
+"I am a workflow controller that orchestrates ADC agent execution through sequential invocation with minimal overhead. I maintain workflow state, manage loop iterations, create context summaries, and enforce exit conditions. I never accumulate full agent responses in my context - only compact state transitions."
+
+**Thinking Process:**
+
+```python
+def execute_workflow(task_description: str, workspace: str) -> WorkflowResult:
+    """
+    Execute the sequential ADC workflow with nested loops.
+
+    Returns: WorkflowResult with final state and outcome
+    """
+
+    # Initialize state
+    state = WorkflowState.from_task(task_description, workspace)
+
+    # Phase 1: Initial Contract Creation
+    contracts = invoke_contract_writer(task_description)
+    contracts_summary = create_summary(contracts, max_tokens=10_000)
+    state.contracts_summary = contracts_summary
+
+    # OUTER LOOP: Refinement Loop (max 5 iterations)
+    for outer_iteration in range(state.max_outer):
+        state.outer_iteration = outer_iteration
+
+        # Phase 2: Audit Contracts
+        audit_result = invoke_auditor(contracts_summary)
+        state.compliance_score = audit_result.compliance_score
+        state.last_violations = audit_result.violations
+
+        # INNER LOOP: Implementation Loop (until compliance >= 0.8)
+        state.inner_loop_active = True
+        inner_iteration = 0
+
+        while state.compliance_score < 0.8 and inner_iteration < state.max_inner:
+            state.inner_iteration = inner_iteration
+
+            # Phase 3: Generate/Fix Code
+            violations_context = create_violations_summary(
+                state.last_violations,
+                max_tokens=5_000
+            )
+
+            code_result = invoke_code_generator(
+                contracts_summary=contracts_summary,
+                violations=violations_context,
+                iteration=inner_iteration
+            )
+
+            # Phase 4: Re-audit Implementation
+            audit_result = invoke_auditor(contracts_summary)
+            state.compliance_score = audit_result.compliance_score
+            state.last_violations = audit_result.violations
+
+            inner_iteration += 1
+
+        state.inner_loop_active = False
+
+        # Exit inner loop when compliance >= 0.8 OR max iterations reached
+        if state.compliance_score < 0.8:
+            return WorkflowResult(
+                status="failed",
+                reason="max_inner_iterations_reached",
+                final_state=state
+            )
+
+        # Phase 5: System Evaluation
+        evaluator_result = invoke_system_evaluator(
+            contracts_summary=contracts_summary,
+            workspace=workspace
+        )
+
+        state.evaluator_satisfied = evaluator_result.satisfied
+        state.evaluator_feedback = evaluator_result.feedback
+
+        # Decision Point: Are tests passing?
+        if evaluator_result.satisfied:
+            # SUCCESS PATH: Create PR
+            pr_result = invoke_pr_orchestrator(workspace)
+
+            return WorkflowResult(
+                status="success",
+                pr_url=pr_result.pr_url,
+                final_state=state,
+                total_tokens=state.calculate_total_tokens(),
+                total_cost=state.calculate_total_cost()
+            )
+
+        # FAILURE PATH: Refine contracts and retry
+        # Phase 6: Contract Refinement
+        refiner_result = invoke_refiner(
+            contracts=contracts,  # Refiner needs FULL contracts
+            feedback=evaluator_result.feedback
+        )
+
+        contracts = refiner_result.refined_contracts
+        contracts_summary = create_summary(contracts, max_tokens=10_000)
+        state.contracts_summary = contracts_summary
+
+        # Loop back to auditor with refined contracts
+        # (inner loop counter resets automatically)
+
+    # Max outer iterations reached
+    return WorkflowResult(
+        status="failed",
+        reason="max_outer_iterations_reached",
+        final_state=state
+    )
+```
+
+**State Management:**
+- Maintains minimal state: iteration counters, compliance score, summary strings
+- Never accumulates full agent responses
+- Records phase transitions with token counts
+- Calculates running cost estimates
+
+**Exit Conditions:**
+- Inner loop: `compliance >= 0.8` OR `inner_iteration >= max_inner`
+- Outer loop: `evaluator.satisfied == true` OR `outer_iteration >= max_outer`
+- Success: PR created successfully
+- Failure: Max iterations reached without satisfaction
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/sequential_workflow.py::SequentialWorkflowController`
+- **Tests:** `tests/workflows/test_sequential_workflow.py::test_workflow_execution`
+
+### [DataModel: WorkflowState] <sequential-workflow-datamodel-01>
+
+Maintains the state of the sequential workflow execution across nested loops.
+
+- `task_description: str` - Original task description (required)
+- `workspace: str` - Path to workspace directory (required)
+- `outer_iteration: int` - Current refinement loop iteration (defaults to 0)
+- `inner_iteration: int` - Current implementation loop iteration (defaults to 0)
+- `max_outer: int` - Maximum refinement iterations (defaults to 5)
+- `max_inner: int` - Maximum implementation iterations per refinement (defaults to 10)
+- `contracts_summary: str` - Summarized contract context (defaults to empty string)
+- `compliance_score: float` - Latest audit compliance score (defaults to 0.0)
+- `last_violations: List[str]` - Latest audit violations (defaults to empty list)
+- `evaluator_satisfied: bool` - Whether system evaluator is satisfied (defaults to False)
+- `evaluator_feedback: str` - Latest evaluator feedback (defaults to empty string)
+- `inner_loop_active: bool` - Whether currently in inner loop (defaults to False)
+- `phase_history: List[PhaseRecord]` - History of phase transitions (defaults to empty list)
+
+**Methods:**
+```python
+def calculate_total_tokens(self) -> int:
+    """Sum tokens used across all phases"""
+    return sum(phase.tokens_used for phase in self.phase_history)
+
+def calculate_total_cost(self) -> float:
+    """Calculate total cost at $6.60 per 1M tokens"""
+    return (self.calculate_total_tokens() / 1_000_000) * 6.60
+
+def record_phase(self, agent: str, tokens_used: int, result_summary: str):
+    """Record a phase transition"""
+    self.phase_history.append(PhaseRecord(
+        agent=agent,
+        timestamp=datetime.now(),
+        tokens_used=tokens_used,
+        result_summary=result_summary
+    ))
+
+@classmethod
+def from_task(cls, task_description: str, workspace: str) -> 'WorkflowState':
+    """Factory method to initialize state from task"""
+    return cls(
+        task_description=task_description,
+        workspace=workspace
+    )
+```
+
+**Functional Design Note:** No Optional types - all fields have explicit defaults. Status communicated through boolean flags and numeric scores rather than None values.
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/state.py::WorkflowState`
+
+### [DataModel: PhaseRecord] <sequential-workflow-datamodel-02>
+
+Records the execution of a single workflow phase (agent invocation).
+
+- `agent: str` - Agent name (e.g., "auditor", "code_generator") (required)
+- `timestamp: datetime` - When phase executed (required)
+- `tokens_used: int` - Tokens consumed in this phase (required)
+- `result_summary: str` - Compact summary of phase result (required)
+- `iteration_context: dict` - Iteration numbers at time of execution (defaults to empty dict)
+
+**Example:**
+```python
+PhaseRecord(
+    agent="code_generator",
+    timestamp=datetime(2025, 12, 16, 14, 30, 0),
+    tokens_used=350_000,
+    result_summary="Generated 15 files, fixed 3 violations",
+    iteration_context={"outer": 2, "inner": 1}
+)
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/state.py::PhaseRecord`
+
+### [DataModel: WorkflowResult] <sequential-workflow-datamodel-03>
+
+Result of workflow execution with final state and outcome.
+
+- `status: str` - "success", "failed" (required)
+- `reason: str` - Reason for outcome (defaults to "completed")
+- `pr_url: str` - Pull request URL if successful (defaults to empty string)
+- `final_state: WorkflowState` - Final workflow state (required)
+- `total_tokens: int` - Total tokens consumed (required)
+- `total_cost: float` - Total cost in dollars (required)
+- `execution_time_seconds: float` - Total execution time (defaults to 0.0)
+
+**Methods:**
+```python
+def is_success(self) -> bool:
+    """Check if workflow succeeded"""
+    return self.status == "success"
+
+def token_efficiency_vs_baseline(self, baseline_tokens: int = 15_100_000) -> float:
+    """Calculate token efficiency improvement percentage"""
+    return ((baseline_tokens - self.total_tokens) / baseline_tokens) * 100
+
+def cost_savings_vs_baseline(self, baseline_cost: float = 10.02) -> float:
+    """Calculate cost savings percentage"""
+    return ((baseline_cost - self.total_cost) / baseline_cost) * 100
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/state.py::WorkflowResult`
+
+### [Algorithm: Nested Loop Control] <sequential-workflow-algorithm-01>
+
+Algorithm for managing nested loop execution with proper exit conditions and state transitions.
+
+**Inner Loop (Implementation Refinement):**
+
+```
+INNER_LOOP = {
+    "agents": ["auditor", "code_generator"],
+    "purpose": "Implement contracts correctly",
+    "max_iterations": 10,
+    "exit_condition": "compliance >= 0.8 OR iterations >= max_inner",
+    "state_changes": ["code files", "compliance score", "violations list"],
+    "contracts_unchanged": true,
+    "token_cost_per_iteration": 500_000
+}
+
+Algorithm:
+while compliance < 0.8 AND inner_iteration < max_inner:
+    1. Create violations summary (5K tokens) from audit results
+    2. Invoke code_generator with:
+       - contracts_summary (10K tokens)
+       - violations (5K tokens)
+       - Current iteration number
+    3. Code generator fixes violations, generates/updates code
+    4. Invoke auditor with contracts_summary (10K tokens)
+    5. Update compliance score and violations list
+    6. Increment inner_iteration
+    7. Check exit condition
+
+Exit: compliance >= 0.8 (success) OR max_inner reached (escalate)
+```
+
+**Outer Loop (Contract Refinement):**
+
+```
+OUTER_LOOP = {
+    "agents": ["evaluator", "refiner", "auditor", "[inner_loop]"],
+    "purpose": "Fix contract issues when implementation is correct but tests fail",
+    "max_iterations": 5,
+    "exit_condition": "evaluator.satisfied == true OR iterations >= max_outer",
+    "state_changes": ["contracts", "contracts_summary", "code", "compliance score"],
+    "token_cost_per_iteration": 2_000_000
+}
+
+Algorithm:
+for outer_iteration in range(max_outer):
+    1. Invoke auditor with contracts_summary (10K tokens)
+    2. Execute INNER_LOOP to achieve compliance >= 0.8
+    3. If inner loop failed (max iterations):
+       - Return FAILURE: "Cannot achieve compliance"
+    4. Invoke system_evaluator with:
+       - contracts_summary (10K tokens)
+       - workspace path
+    5. If evaluator.satisfied == true:
+       - Invoke pr_orchestrator
+       - Return SUCCESS with PR URL
+    6. Else (tests failing):
+       - Invoke refiner with:
+         - Full contracts (100K tokens) - refiner needs complete context
+         - evaluator feedback (15K tokens)
+       - Update contracts and contracts_summary
+       - Continue to next outer iteration (inner loop resets)
+
+Exit: evaluator.satisfied (success) OR max_outer reached (failure)
+```
+
+**Token Budget Management:**
+
+```
+Expected token consumption per workflow:
+
+Initial setup:
+- Contract writer: 200K tokens
+- Initial summary creation: 10K tokens
+
+Per outer iteration:
+- Auditor (initial): 200K tokens
+- Inner loop (avg 3 iterations): 3 × 500K = 1.5M tokens
+- System evaluator: 800K tokens
+- Refiner (if needed): 500K tokens
+- Summary updates: 10K tokens
+Total per outer iteration: ~3M tokens
+
+Expected workflow:
+- Successful on iteration 1: ~3.2M tokens ($2.11)
+- Successful on iteration 2: ~6.2M tokens ($4.09)
+- Successful on iteration 3: ~9.2M tokens ($6.07)
+- Average (2.3 iterations): ~7M tokens ($4.62)
+
+Baseline comparison:
+- Current orchestrator: 15.1M tokens ($10.02)
+- Sequential workflow: 7M tokens ($4.62)
+- Savings: 53.6% tokens, 53.9% cost
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/loop_control.py`
+- **Tests:** `tests/workflows/test_loop_control.py`
+
+### [Algorithm: Context Summarization] <sequential-workflow-algorithm-02>
+
+Algorithm for creating minimal context summaries that preserve essential information while drastically reducing token overhead.
+
+**Contracts Summary (for most agents):**
+
+```
+Input: Full contracts (100K tokens)
+Output: Contracts summary (10K tokens)
+Savings: 90% token reduction
+
+Algorithm:
+1. Extract YAML front matter from all contracts
+2. For each contract:
+   - Include contract_id, title, status
+   - Extract [Rationale] blocks (first 200 chars)
+   - List all block types and IDs
+   - Summarize [DataModel] schemas (field names + types only)
+   - Include [Constraint] blocks verbatim (usually short)
+3. Create cross-reference index (which contracts reference others)
+4. Generate token count estimate
+5. If > 10K tokens, prioritize:
+   - Active contracts over deprecated
+   - [DataModel] and [Agent] over other types
+   - Rationales for core components
+
+Output format:
+```markdown
+# Contracts Summary (10,243 tokens)
+
+## Contract: example-datamodel-001
+- Status: active
+- Rationale: Defines core data structures for...
+- Blocks: 5 DataModels, 2 Algorithms, 3 Features
+- Key Models: UserProfile, SessionData, MetricsEvent
+
+## Contract: example-agent-001
+- Status: active
+- Rationale: Implements autonomous code generation...
+- Blocks: 1 Agent, 2 Tools, 4 TestScenarios
+- Dependencies: example-datamodel-001
+```
+
+**Violations Summary (for code generator in inner loop):**
+
+```
+Input: Full audit report (20K tokens)
+Output: Violations summary (5K tokens)
+Savings: 75% token reduction
+
+Algorithm:
+1. Group violations by contract_id
+2. For each violation:
+   - Include violation type (missing_marker, incorrect_impl, etc.)
+   - Include file path and line number
+   - Include expected vs actual (truncate if > 100 chars)
+   - Omit full code context (generator can read files)
+3. Prioritize by severity: high → medium → low
+4. Include violation count statistics
+
+Output format:
+```markdown
+# Violations Summary (4,891 tokens)
+
+## High Priority (3 violations)
+1. Missing ADC-IMPLEMENTS marker
+   - Contract: example-datamodel-001
+   - Expected: src/models/user.py:15
+   - Action: Add marker before UserProfile class
+
+## Medium Priority (5 violations)
+...
+```
+
+**Evaluator Context (for system evaluator):**
+
+```
+Input: Full contracts (100K) + full code (200K)
+Output: Test targets summary (20K tokens)
+Savings: 93% token reduction
+
+Algorithm:
+1. Extract [TestScenario] blocks from contracts
+2. List all test files mentioned in Parity sections
+3. Include [Constraint] blocks (performance requirements)
+4. List all implemented contract IDs (for coverage check)
+5. Omit implementation details (evaluator runs tests, doesn't read code)
+
+Output format:
+```markdown
+# Test Targets Summary (19,234 tokens)
+
+## Test Scenarios (from contracts)
+1. [test-scenario-01]: User authentication flow
+2. [test-scenario-02]: Data validation edge cases
+3. [test-scenario-03]: Performance under load
+
+## Test Files (from Parity sections)
+- tests/test_models.py
+- tests/test_auth.py
+- tests/integration/test_e2e.py
+
+## Performance Constraints
+- Response time: < 100ms
+- Memory usage: < 512MB
+- Throughput: > 1000 req/s
+
+## Implementation Coverage
+- Implemented: 12 contracts
+- Partial: 2 contracts
+- Missing: 1 contract
+```
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/context_summarizer.py`
+- **Tests:** `tests/workflows/test_context_summarization.py`
+
+### [Tool: ContextSummarizer] <sequential-workflow-tool-01>
+
+A utility tool that creates token-efficient summaries of contracts, audit results, and evaluation feedback for agent consumption.
+
+**Interface:**
+
+```python
+class ContextSummarizer:
+    """Create minimal context summaries for sequential workflow agents"""
+
+    def summarize_contracts(
+        self,
+        contracts: List[str],
+        max_tokens: int = 10_000,
+        priority: List[str] = ["DataModel", "Agent", "Constraint"]
+    ) -> ContractsSummary:
+        """
+        Create contracts summary for auditor, code generator, evaluator.
+
+        Args:
+            contracts: List of full contract file contents
+            max_tokens: Target token limit
+            priority: Block types to prioritize if truncation needed
+
+        Returns:
+            ContractsSummary with text content and metadata
+        """
+
+    def summarize_violations(
+        self,
+        audit_report: AuditReport,
+        max_tokens: int = 5_000
+    ) -> ViolationsSummary:
+        """
+        Create violations summary for code generator in inner loop.
+
+        Args:
+            audit_report: Full audit report from auditor agent
+            max_tokens: Target token limit
+
+        Returns:
+            ViolationsSummary with prioritized violations
+        """
+
+    def summarize_evaluator_feedback(
+        self,
+        evaluation_result: EvaluationResult,
+        max_tokens: int = 15_000
+    ) -> EvaluatorFeedback:
+        """
+        Create feedback summary for refiner agent.
+
+        Args:
+            evaluation_result: Full evaluation result
+            max_tokens: Target token limit
+
+        Returns:
+            EvaluatorFeedback with test failures and recommendations
+        """
+
+    def estimate_tokens(self, text: str) -> int:
+        """
+        Estimate token count for text.
+        Uses tiktoken for accurate Claude token counting.
+        """
+```
+
+**Core Operations:**
+
+1. **Token Estimation**: Uses tiktoken library for accurate token counting
+2. **Hierarchical Truncation**: Prioritizes critical information, truncates less important
+3. **Structure Preservation**: Maintains markdown structure for agent parsing
+4. **Metadata Tracking**: Records original size, compressed size, compression ratio
+
+**Token Savings Examples:**
+
+| Context Type | Original | Summary | Savings |
+|-------------|----------|---------|---------|
+| Full Contracts | 100K | 10K | 90% |
+| Audit Report | 20K | 5K | 75% |
+| Evaluation Result | 30K | 15K | 50% |
+| Code Context | 200K | 20K | 90% |
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/context_summarizer.py::ContextSummarizer`
+- **Tests:** `tests/workflows/test_context_summarization.py`
+
+### [Feature: Sequential Agent Invocation] <sequential-workflow-feature-01>
+
+Direct agent-to-agent invocation without centralized orchestrator accumulation.
+
+**Implementation:**
+
+```python
+class AgentInvoker:
+    """Invoke ADC agents sequentially with summarized context"""
+
+    def __init__(self, config: WorkflowConfig):
+        self.config = config
+        self.summarizer = ContextSummarizer()
+
+    def invoke_contract_writer(self, task_description: str) -> ContractWriterResult:
+        """Phase 1: Create initial contracts"""
+        prompt = f"""Create ADC contracts for the following task:
+
+{task_description}
+
+Follow the ADC schema and include all required sections."""
+
+        response = self._call_agent(
+            agent="contract_writer",
+            system_prompt=self._load_role_prompt("contract_writer"),
+            user_content=prompt
+        )
+
+        return ContractWriterResult.from_response(response)
+
+    def invoke_auditor(self, contracts_summary: str) -> AuditResult:
+        """Phase 2 & 4: Audit contract compliance"""
+        prompt = f"""Audit the implementation against these contracts:
+
+{contracts_summary}
+
+Check for:
+1. ADC-IMPLEMENTS markers
+2. Contract compliance
+3. Parity section fulfillment
+
+Return compliance score (0.0-1.0) and list of violations."""
+
+        response = self._call_agent(
+            agent="auditor",
+            system_prompt=self._load_role_prompt("auditor"),
+            user_content=prompt
+        )
+
+        return AuditResult.from_response(response)
+
+    def invoke_code_generator(
+        self,
+        contracts_summary: str,
+        violations: str,
+        iteration: int
+    ) -> CodeGeneratorResult:
+        """Phase 3: Generate/fix code"""
+        prompt = f"""Generate code to implement these contracts:
+
+{contracts_summary}
+
+Fix these violations from iteration {iteration}:
+
+{violations}
+
+Add ADC-IMPLEMENTS markers before each class/function."""
+
+        response = self._call_agent(
+            agent="code_generator",
+            system_prompt=self._load_role_prompt("code_generator"),
+            user_content=prompt
+        )
+
+        return CodeGeneratorResult.from_response(response)
+
+    def invoke_system_evaluator(
+        self,
+        contracts_summary: str,
+        workspace: str
+    ) -> EvaluatorResult:
+        """Phase 5: Run tests and evaluate implementation"""
+        prompt = f"""Evaluate the implementation against contracts:
+
+{contracts_summary}
+
+Workspace: {workspace}
+
+Run all tests and check:
+1. Test pass rate
+2. Performance constraints
+3. Feature completeness
+
+Return satisfied=true if all tests pass."""
+
+        response = self._call_agent(
+            agent="system_evaluator",
+            system_prompt=self._load_role_prompt("system_evaluator"),
+            user_content=prompt
+        )
+
+        return EvaluatorResult.from_response(response)
+
+    def invoke_refiner(
+        self,
+        contracts: str,  # Full contracts, not summary
+        feedback: str
+    ) -> RefinerResult:
+        """Phase 6: Refine contracts based on evaluation feedback"""
+        prompt = f"""Refine these contracts based on test failures:
+
+{contracts}
+
+Evaluation feedback:
+
+{feedback}
+
+Update contracts to fix root cause issues."""
+
+        response = self._call_agent(
+            agent="refiner",
+            system_prompt=self._load_role_prompt("refiner"),
+            user_content=prompt
+        )
+
+        return RefinerResult.from_response(response)
+
+    def invoke_pr_orchestrator(self, workspace: str) -> PRResult:
+        """Final phase: Create pull request"""
+        # Implementation details...
+```
+
+**Key Characteristics:**
+- Each invocation is independent (no shared context)
+- Agents receive only necessary summarized context
+- No accumulation of full responses in parent session
+- State persisted through WorkflowState object, not conversation history
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/agent_invoker.py`
+- **Tests:** `tests/workflows/test_agent_invocation.py`
+
+### [Feature: Token Budget Tracking] <sequential-workflow-feature-02>
+
+Real-time tracking of token consumption and cost across workflow execution.
+
+**Implementation:**
+
+```python
+class TokenBudgetTracker:
+    """Track token usage and cost in real-time"""
+
+    def __init__(self, baseline_tokens: int = 15_100_000, baseline_cost: float = 10.02):
+        self.baseline_tokens = baseline_tokens
+        self.baseline_cost = baseline_cost
+        self.current_tokens = 0
+        self.phase_breakdown: Dict[str, int] = {}
+
+    def record_phase(self, agent: str, tokens_used: int):
+        """Record tokens used in a phase"""
+        self.current_tokens += tokens_used
+        self.phase_breakdown[agent] = self.phase_breakdown.get(agent, 0) + tokens_used
+
+    def current_cost(self) -> float:
+        """Calculate current cost at $6.60 per 1M tokens"""
+        return (self.current_tokens / 1_000_000) * 6.60
+
+    def savings_vs_baseline(self) -> Dict[str, float]:
+        """Calculate savings compared to baseline"""
+        token_savings_pct = ((self.baseline_tokens - self.current_tokens) / self.baseline_tokens) * 100
+        cost_savings_pct = ((self.baseline_cost - self.current_cost()) / self.baseline_cost) * 100
+
+        return {
+            "token_savings_pct": token_savings_pct,
+            "cost_savings_pct": cost_savings_pct,
+            "tokens_saved": self.baseline_tokens - self.current_tokens,
+            "dollars_saved": self.baseline_cost - self.current_cost()
+        }
+
+    def report(self) -> TokenReport:
+        """Generate comprehensive token usage report"""
+        return TokenReport(
+            total_tokens=self.current_tokens,
+            total_cost=self.current_cost(),
+            phase_breakdown=self.phase_breakdown,
+            savings=self.savings_vs_baseline(),
+            baseline_comparison={
+                "baseline_tokens": self.baseline_tokens,
+                "baseline_cost": self.baseline_cost,
+                "efficiency_ratio": self.current_tokens / self.baseline_tokens
+            }
+        )
+```
+
+**Tracking Granularity:**
+- Per-agent token usage
+- Per-iteration token usage (inner and outer loops)
+- Cumulative token usage across workflow
+- Real-time cost calculation
+- Comparison to baseline orchestrator pattern
+
+**Parity:**
+- **Implementation Scope:** `src/adc/workflows/token_tracker.py`
+- **Tests:** `tests/workflows/test_token_tracking.py`
+
+### [Constraint: Token Budget Limits] <sequential-workflow-constraint-01>
+
+Hard constraints on token usage to prevent runaway costs.
+
+**Token Limits:**
+- Single agent invocation: < 1M tokens (safety limit)
+- Inner loop iteration: < 600K tokens (auditor + generator + overhead)
+- Outer loop iteration: < 3.5M tokens (auditor + inner loop + evaluator + refiner)
+- Total workflow: < 12M tokens (worst case with max iterations)
+
+**Target Efficiency:**
+- Average workflow: 6-8M tokens (vs 15.1M baseline)
+- Token reduction: 47-53%
+- Cost target: $4-6 per task (vs $10.02 baseline)
+- Cost reduction: 40-60%
+
+**Performance Requirements:**
+- Context summarization: < 2 seconds
+- Agent invocation overhead: < 5 seconds
+- State persistence: < 100ms
+- Total workflow time: Same as baseline (within 10%)
+
+**Quality Requirements:**
+- Success rate: >= 91.5% (same as baseline)
+- Code quality: Same or better than baseline
+- Contract compliance: Same or better than baseline
+- No regressions in functionality
+
+**Parity:**
+- **Implementation Scope:** All workflow components
+- **Tests:** `tests/workflows/test_constraints.py`
+
+### [TestScenario: Inner Loop Convergence] <sequential-workflow-test-01>
+
+Test scenario verifying inner loop converges to compliance >= 0.8 within iteration limits.
+
+**Scenario**: Code generator fixes violations through iterative refinement
+
+**Setup:**
+- Initial contracts with 15 implementation requirements
+- Empty workspace (no existing code)
+- Compliance threshold: 0.8
+- Max inner iterations: 10
+
+**Test Sequence:**
+
+1. **Initial Audit (Iteration 0)**
+   - Invoke auditor with contracts summary
+   - Expected: compliance = 0.0 (no implementation)
+   - Violations: 15 missing implementations
+
+2. **First Generation (Iteration 1)**
+   - Invoke code generator with violations summary
+   - Expected: Generate 15 files with ADC-IMPLEMENTS markers
+   - Re-audit: compliance = 0.6 (partial implementation)
+   - Remaining violations: 6 incorrect implementations
+
+3. **Second Generation (Iteration 2)**
+   - Invoke code generator with 6 violations
+   - Expected: Fix 4 violations
+   - Re-audit: compliance = 0.75
+   - Remaining violations: 2
+
+4. **Third Generation (Iteration 3)**
+   - Invoke code generator with 2 violations
+   - Expected: Fix both violations
+   - Re-audit: compliance = 0.85
+   - Exit inner loop (success)
+
+**Success Criteria:**
+- Inner loop exits with compliance >= 0.8
+- Iterations <= max_inner (10)
+- Each iteration reduces violations
+- Token usage per iteration < 600K
+- Total inner loop tokens < 2M
+
+**Edge Cases:**
+- Test with difficult violations requiring multiple attempts
+- Test with max_inner reached (should escalate to outer loop failure)
+- Test with compliance oscillating (should track best score)
+
+**Parity:**
+- **Implementation Scope:** Full inner loop
+- **Tests:** `tests/workflows/test_inner_loop_convergence.py`
+
+### [TestScenario: Outer Loop Contract Refinement] <sequential-workflow-test-02>
+
+Test scenario verifying outer loop refines contracts when tests fail despite correct implementation.
+
+**Scenario**: Contracts have design issues requiring refinement
+
+**Setup:**
+- Initial contracts with architectural issues
+- Implementation achieves compliance = 0.85 (passes inner loop)
+- Tests fail due to contract design problems
+- Max outer iterations: 5
+
+**Test Sequence:**
+
+1. **First Outer Iteration**
+   - Inner loop achieves compliance = 0.85
+   - System evaluator runs tests
+   - Expected: Tests fail (architectural issues)
+   - Evaluator feedback: "Database schema mismatch"
+   - Invoke refiner with feedback
+   - Refiner updates contracts
+
+2. **Second Outer Iteration**
+   - Inner loop re-implements with refined contracts
+   - Achieves compliance = 0.88
+   - System evaluator runs tests
+   - Expected: Tests fail (partial fix)
+   - Evaluator feedback: "API contract violations"
+   - Invoke refiner with feedback
+   - Refiner updates contracts
+
+3. **Third Outer Iteration**
+   - Inner loop re-implements with refined contracts
+   - Achieves compliance = 0.90
+   - System evaluator runs tests
+   - Expected: Tests pass
+   - Exit outer loop (success)
+   - Invoke PR orchestrator
+
+**Success Criteria:**
+- Outer loop exits when evaluator.satisfied = true
+- Contracts refined based on test feedback
+- Each refinement addresses root cause issues
+- Token usage per outer iteration < 3.5M
+- Total workflow tokens < 10M
+
+**Edge Cases:**
+- Test with max_outer reached (should fail gracefully)
+- Test with unfixable contract issues (should provide clear feedback)
+- Test with evaluator feedback misinterpretation (should request clarification)
+
+**Parity:**
+- **Implementation Scope:** Full outer loop
+- **Tests:** `tests/workflows/test_outer_loop_refinement.py`
+
+### [TestScenario: Token Budget Compliance] <sequential-workflow-test-03>
+
+Test scenario verifying token usage meets efficiency targets across various workflow paths.
+
+**Scenario**: Track token consumption for successful and failed workflows
+
+**Test Cases:**
+
+1. **Optimal Path (First Try Success)**
+   - Outer iterations: 1
+   - Inner iterations: 3
+   - Expected tokens: ~3.2M
+   - Expected cost: ~$2.11
+   - Savings vs baseline: 78.8%
+
+2. **Typical Path (Second Try Success)**
+   - Outer iterations: 2
+   - Inner iterations: 3 (first), 2 (second)
+   - Expected tokens: ~6.2M
+   - Expected cost: ~$4.09
+   - Savings vs baseline: 58.9%
+
+3. **Difficult Path (Third Try Success)**
+   - Outer iterations: 3
+   - Inner iterations: 5 (first), 4 (second), 3 (third)
+   - Expected tokens: ~9.2M
+   - Expected cost: ~$6.07
+   - Savings vs baseline: 39.1%
+
+4. **Max Iterations (Failure)**
+   - Outer iterations: 5 (max)
+   - Inner iterations: varies
+   - Expected tokens: ~11M
+   - Expected cost: ~$7.26
+   - Savings vs baseline: 27.2%
+
+**Verification:**
+- Token tracking accurate within 5%
+- Cost calculations correct
+- Phase breakdown matches expectations
+- Summaries achieve target compression (85-90%)
+
+**Success Criteria:**
+- Average workflow: 6-8M tokens (verified)
+- Token reduction: 47-53% (verified)
+- Cost reduction: 40-60% (verified)
+- No workflow exceeds 12M tokens
+
+**Parity:**
+- **Implementation Scope:** Token tracking system
+- **Tests:** `tests/workflows/test_token_budget_compliance.py`
+
+### [Diagram: Sequential Workflow Architecture] <sequential-workflow-diagram-01>
+
+```mermaid
+flowchart TD
+    Start([Start: Task Description]) --> ContractWriter[Phase 1: Contract Writer]
+    ContractWriter --> Summary1[Create Summary: 100K → 10K]
+    Summary1 --> OuterLoop{Outer Loop<br/>iter < 5}
+
+    OuterLoop -->|Enter| Auditor1[Phase 2: Auditor<br/>Input: Summary 10K]
+    Auditor1 --> InnerLoop{Inner Loop<br/>compliance < 0.8<br/>AND iter < 10}
+
+    InnerLoop -->|Yes| ViolationsSummary[Create Violations Summary<br/>20K → 5K]
+    ViolationsSummary --> CodeGen[Phase 3: Code Generator<br/>Input: Summary 10K + Violations 5K]
+    CodeGen --> Auditor2[Phase 4: Auditor Re-check<br/>Input: Summary 10K]
+    Auditor2 --> UpdateCompliance[Update Compliance Score]
+    UpdateCompliance --> InnerLoop
+
+    InnerLoop -->|No: compliance >= 0.8| Evaluator[Phase 5: System Evaluator<br/>Input: Summary 10K]
+    InnerLoop -->|No: max iter| FailInner[FAIL: Max Inner Iterations]
+
+    Evaluator --> TestsPassing{Tests Passing?}
+
+    TestsPassing -->|Yes| PROrch[Phase 7: PR Orchestrator]
+    PROrch --> Success([SUCCESS: PR Created])
+
+    TestsPassing -->|No| Refiner[Phase 6: Refiner<br/>Input: Full Contracts 100K + Feedback 15K]
+    Refiner --> UpdateContracts[Update Contracts]
+    UpdateContracts --> Summary2[Create New Summary<br/>100K → 10K]
+    Summary2 --> OuterLoop
+
+    OuterLoop -->|iter >= 5| FailOuter[FAIL: Max Outer Iterations]
+
+    style ContractWriter fill:#e1f5ff
+    style Auditor1 fill:#fff4e1
+    style Auditor2 fill:#fff4e1
+    style CodeGen fill:#e1ffe1
+    style Evaluator fill:#ffe1f5
+    style Refiner fill:#f5e1ff
+    style PROrch fill:#e1ffe1
+    style Summary1 fill:#ffd700
+    style Summary2 fill:#ffd700
+    style ViolationsSummary fill:#ffd700
+    style Success fill:#90EE90
+    style FailInner fill:#FFB6C6
+    style FailOuter fill:#FFB6C6
+```
+
+**Diagram Notes:**
+- Yellow nodes: Context summarization (token reduction)
+- Blue: Contract creation
+- Orange: Auditing
+- Green: Code generation and PR
+- Pink: Evaluation
+- Purple: Refinement
+- Success/Fail: Workflow outcomes
+
+**Token Flow:**
+- Full contracts (100K) → Summary (10K) at workflow start
+- Summary reused across inner loop iterations
+- Full contracts only passed to Refiner (needs complete context)
+- Violations compressed 20K → 5K for Code Generator
+
+**Parity:**
+- **Implementation Scope:** Visual documentation
+- **Tests:** Diagram reflects implementation in `tests/workflows/`
