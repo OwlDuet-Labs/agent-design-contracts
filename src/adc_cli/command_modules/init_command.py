@@ -153,15 +153,15 @@ This directory contains Agent Design Contract (ADC) specifications.
 ## File Naming Convention
 
 Contracts should follow this naming pattern:
-- `ADC_{NUMBER}_{NAME}.qmd`
-- Example: `ADC_001_SYSTEM_ARCHITECTURE.qmd`
+- `ADC_{NUMBER}_{NAME}.md`
+- Example: `ADC_001_SYSTEM_ARCHITECTURE.md`
 
 ## Structure
 
 Each contract file should:
 1. Start with YAML front matter containing metadata
 2. Include design blocks following the ADC schema
-3. Reference the schema at `~/.claude/schema/adc-schema.qmd`
+3. Reference the schema at `~/.claude/schema/adc-schema.md`
 
 ## Workflow
 
@@ -241,7 +241,7 @@ See the ADC schema for complete documentation.
         print(f"   1. Create your first contract in contracts/")
         print(f"   2. Run 'adc-setup' to install Claude Code integration")
         print(f"   3. Use '@adc-contract-writer' to create contracts")
-        print(f"   4. See the schema: cat ~/.claude/schema/adc-schema.qmd")
+        print(f"   4. See the schema: cat ~/.claude/schema/adc-schema.md")
 
     print("=" * 60)
 

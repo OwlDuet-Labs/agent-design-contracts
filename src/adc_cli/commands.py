@@ -47,28 +47,34 @@ def generate_command(
         logger.error(f"Error reading code generator role: {e}")
         return False
 
-    # Find all .qmd files in contracts directory
+    # Find all contract files in contracts directory (supports both .md and .qmd)
     contracts_path = Path(contracts_dir) / "contracts"
     if not contracts_path.exists():
         logger.error(f"Contracts directory not found: {contracts_path}")
         return False
 
+    # Prefer .md files, include .qmd for backward compatibility
+    md_files = list(contracts_path.glob("*.md"))
     qmd_files = list(contracts_path.glob("*.qmd"))
-    if not qmd_files:
-        logger.warning(f"No .qmd contract files found in {contracts_path}")
+    # Filter out .qmd files that have .md equivalents
+    qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
+    contract_files = md_files + qmd_only
+
+    if not contract_files:
+        logger.warning(f"No contract files found in {contracts_path}")
         return False
 
-    logger.info(f"Found {len(qmd_files)} contract files")
+    logger.info(f"Found {len(contract_files)} contract files")
 
     # Read all contract files
     contracts_content = ""
-    for qmd_file in qmd_files:
+    for contract_file in contract_files:
         try:
-            with open(qmd_file, "r", encoding="utf-8") as f:
-                contracts_content += f"\n\n=== {qmd_file.name} ===\n"
+            with open(contract_file, "r", encoding="utf-8") as f:
+                contracts_content += f"\n\n=== {contract_file.name} ===\n"
                 contracts_content += f.read()
         except Exception as e:
-            logger.error(f"Error reading contract file {qmd_file}: {e}")
+            logger.error(f"Error reading contract file {contract_file}: {e}")
             continue
 
     if not contracts_content.strip():
@@ -149,17 +155,21 @@ def audit_command(
         logger.error(f"Source directory not found: {src_path}")
         return False
 
-    # Read all contract files
+    # Read all contract files (supports both .md and .qmd)
     contracts_content = ""
+    md_files = list(contracts_path.glob("*.md"))
     qmd_files = list(contracts_path.glob("*.qmd"))
+    # Filter out .qmd files that have .md equivalents
+    qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
+    audit_contract_files = md_files + qmd_only
 
-    for qmd_file in qmd_files:
+    for contract_file in audit_contract_files:
         try:
-            with open(qmd_file, "r", encoding="utf-8") as f:
-                contracts_content += f"\n\n=== CONTRACT: {qmd_file.name} ===\n"
+            with open(contract_file, "r", encoding="utf-8") as f:
+                contracts_content += f"\n\n=== CONTRACT: {contract_file.name} ===\n"
                 contracts_content += f.read()
         except Exception as e:
-            logger.error(f"Error reading contract file {qmd_file}: {e}")
+            logger.error(f"Error reading contract file {contract_file}: {e}")
             continue
 
     # Read source files (Python files)
@@ -342,7 +352,7 @@ def setup_vscode_command(verbose: bool = False):
 
     # Add ADC-specific settings
     adc_settings = {
-        "files.associations": {"*.qmd": "markdown"},
+        "files.associations": {"*.qmd": "markdown", "*.md": "markdown"},
         "markdown.extension.list.indentationSize": "compact",
         "markdown.extension.toc.levels": "2..6",
     }
@@ -412,7 +422,7 @@ def setup_vscode_command(verbose: bool = False):
     print("You can now:")
     print("  - Use Ctrl+Shift+P -> 'Tasks: Run Task' -> 'ADC: Generate Code'")
     print("  - Use Ctrl+Shift+P -> 'Tasks: Run Task' -> 'ADC: Audit Implementation'")
-    print("  - .qmd files will be treated as Markdown with syntax highlighting")
+    print("  - ADC contract files (.md, .qmd) will be treated as Markdown with syntax highlighting")
 
     return True
 

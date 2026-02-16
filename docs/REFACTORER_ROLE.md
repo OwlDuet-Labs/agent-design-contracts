@@ -138,7 +138,7 @@ completion_criteria: [] # Completion conditions
 In the ADC-v1 repository:
 
 - **`roles/refactorer.md`** - New role definition
-- **`adc-schema.qmd`** - Updated with contract types and new block types
+- **`adc-schema.md`** - Updated with contract types and new block types
 - **`CHANGELOG.md`** - Documented changes
 - **`docs/REFACTORER_ROLE.md`** - This documentation
 

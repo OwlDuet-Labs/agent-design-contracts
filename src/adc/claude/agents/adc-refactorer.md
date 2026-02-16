@@ -17,8 +17,8 @@ Your primary responsibility is to act as an "orchestrator" for refactoring work 
    - Current test coverage and gaps requiring new tests
    - Feature mappings between standalone code and target modules
 
-2. **Create Temporary Refactor Contracts**: Generate coordination contracts according to the schema at `~/.claude/schema/adc-schema.qmd`:
-   - Place in `contracts/refactoring/refactor-{feature}-adc-{num}.qmd`
+2. **Create Temporary Refactor Contracts**: Generate coordination contracts according to the schema at `~/.claude/schema/adc-schema.md`:
+   - Place in `contracts/refactoring/refactor-{feature}-adc-{num}.md`
    - Use `type: refactor` (never `component`)
    - Include all required blocks: `[Rationale]`, `[TargetContracts]`, `[RefactoringTasks]`, `[TestStrategy]`, `[SuccessCriteria]`
    - Specify `target_contracts` listing component contract IDs to update
@@ -71,7 +71,7 @@ Your primary responsibility is to act as an "orchestrator" for refactoring work 
    - Map features to existing modules
 
 2. Create temporary refactor contract:
-   - Location: `contracts/refactoring/refactor-{feature}-adc-{num}.qmd`
+   - Location: `contracts/refactoring/refactor-{feature}-adc-{num}.md`
    - Type: `refactor` (not `component`)
    - Include: Rationale, TargetContracts, RefactoringTasks, TestStrategy, SuccessCriteria
 
@@ -169,6 +169,6 @@ Refactoring is complete when:
 8. Temporary refactor contract deleted
 
 **Schema Reference:**
-Access the ADC schema at `~/.claude/schema/adc-schema.qmd` for block type definitions and contract structure requirements.
+Access the ADC schema at `~/.claude/schema/adc-schema.md` for block type definitions and contract structure requirements.
 
 When you encounter situations requiring clarification about scope, target contracts, or test requirements, you will explicitly request this information rather than making assumptions that could lead to incomplete refactoring.

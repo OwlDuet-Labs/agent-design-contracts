@@ -23,7 +23,7 @@ The linter is available through the `adc lint` command:
 adc lint
 
 # Lint specific file
-adc lint path/to/contract.qmd
+adc lint path/to/contract.md
 
 # Lint specific directory
 adc lint contracts/
@@ -58,7 +58,7 @@ config = {
 linter = ContractLinter(config)
 
 # Lint a single file
-results = linter.lint_contract_file('path/to/contract.qmd')
+results = linter.lint_contract_file('path/to/contract.md')
 
 # Lint a directory
 results = linter.run_contract_lint('/path/to/contracts')
@@ -192,8 +192,8 @@ lint:
   auto_fix: true              # Automatically apply fixes
   backup_originals: true      # Create .backup files before modifying
   check_patterns:             # File patterns to lint
-    - "**/*adc*.qmd"
-    - "**/contracts/**/*.qmd"
+    - "**/*adc*.md"
+    - "**/contracts/**/*.md"
   exclude_patterns:           # Patterns to exclude
     - "**/node_modules/**"
     - "**/trash/**"
@@ -368,7 +368,7 @@ jobs:
 For detailed debugging information:
 
 ```bash
-adc lint -v --dry-run path/to/problematic-file.qmd
+adc lint -v --dry-run path/to/problematic-file.md
 ```
 
 ## Best Practices

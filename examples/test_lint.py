@@ -66,7 +66,7 @@ This contract demonstrates various formatting issues that the linter should fix.
 """
     
     # Create a temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='-adc-test.qmd', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='-adc-test.md', delete=False) as f:
         f.write(content)
         return f.name
 

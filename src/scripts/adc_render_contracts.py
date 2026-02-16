@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ADC Contract Tree Renderer - Simplified Implementation
-Renders .qmd files to PDF while preserving directory structure
+Renders .md and .qmd contract files to PDF while preserving directory structure
 """
 
 import os
@@ -36,12 +36,17 @@ class ContractTreeRenderer:
         except FileNotFoundError:
             return False
     
-    def find_qmd_files(self, source_dir):
-        """Find all .qmd files in directory tree"""
-        qmd_files = []
-        for qmd_file in Path(source_dir).rglob('*.qmd'):
-            qmd_files.append(qmd_file)
-        return sorted(qmd_files)
+    def find_contract_files(self, source_dir):
+        """Find all .md and .qmd contract files in directory tree.
+        Prefers .md files when both exist for the same base name."""
+        md_files = set(Path(source_dir).rglob('*.md'))
+        qmd_files = set(Path(source_dir).rglob('*.qmd'))
+
+        # Filter out .qmd files that have .md equivalents
+        qmd_only = {f for f in qmd_files if f.with_suffix('.md') not in md_files}
+
+        all_files = list(md_files | qmd_only)
+        return sorted(all_files)
     
     def render_file(self, qmd_file, output_pdf):
         """Render a single .qmd file to PDF"""
@@ -117,29 +122,29 @@ class ContractTreeRenderer:
         print("✅ Quarto found")
         
         # Find files
-        print(f"\n📂 Scanning: {source_path}")
-        qmd_files = self.find_qmd_files(source_path)
-        
-        if not qmd_files:
-            print("❌ No .qmd files found")
+        print(f"\n Scanning: {source_path}")
+        contract_files = self.find_contract_files(source_path)
+
+        if not contract_files:
+            print("No contract files found (.md or .qmd)")
             return False
-        
-        print(f"✅ Found {len(qmd_files)} .qmd files")
+
+        print(f"Found {len(contract_files)} contract files")
         
         # Create output directory
         output_path.mkdir(parents=True, exist_ok=True)
         
         # Render each file
-        print(f"\n🔄 Rendering to: {output_path}")
-        for i, qmd_file in enumerate(qmd_files, 1):
+        print(f"\nRendering to: {output_path}")
+        for i, contract_file in enumerate(contract_files, 1):
             # Calculate paths
-            rel_path = qmd_file.relative_to(source_path)
-            pdf_name = qmd_file.stem + '.pdf'
+            rel_path = contract_file.relative_to(source_path)
+            pdf_name = contract_file.stem + '.pdf'
             output_pdf = output_path / rel_path.parent / pdf_name
-            
-            print(f"\n[{i}/{len(qmd_files)}] {rel_path}")
-            
-            success, error = self.render_file(qmd_file, output_pdf)
+
+            print(f"\n[{i}/{len(contract_files)}] {rel_path}")
+
+            success, error = self.render_file(contract_file, output_pdf)
             
             if success:
                 print(f"  ✅ → {output_pdf.relative_to(output_path)}")

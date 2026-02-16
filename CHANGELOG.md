@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Changed
+- **Migrated contract file format** from `.qmd` to `.md` extension
+- All glob patterns now support both `.md` and `.qmd` (preferring `.md`)
+- Agents now detect and offer to convert legacy `.qmd` files
+- Quarto rendering remains fully functional with `.md` files
+- Updated all documentation references from `.qmd` to `.md`
+
+### Added
+- **Migration utility** `src/scripts/adc_migrate_qmd.py` for bulk `.qmd` to `.md` conversion
+  - Dry-run mode to preview changes
+  - Automatic reference updating in files
+  - Migration report generation
+
+### Technical Details
+- Contract validator updated to support both extensions (preferring `.md`)
+- Contract linter patterns updated for dual extension support
+- Render script updated to find both `.md` and `.qmd` files
+- All agent role files updated to reference `.md` extensions
+- Schema path references updated throughout
+
 ## [0.9.2] - 2025-11-12
 
 ### 🔧 Schema Installation, Update Command & File Organization
@@ -15,9 +37,9 @@ This release fixes a critical issue where ADC agents couldn't access the schema 
 ### Added
 
 #### 📚 Schema Installation
-- **Schema file installation** - `adc-schema.qmd` now installed to `~/.claude/schema/`
+- **Schema file installation** - `adc-schema.md` now installed to `~/.claude/schema/`
 - **Symlink support** - Schema supports both copy and symlink modes
-- **Agent accessibility** - All agents can now reference `~/.claude/schema/adc-schema.qmd`
+- **Agent accessibility** - All agents can now reference `~/.claude/schema/adc-schema.md`
 
 #### 📁 File Organization Guidelines
 - **Standardized directory structure** - Added comprehensive file organization section to ADC schema
@@ -42,12 +64,12 @@ This release fixes a critical issue where ADC agents couldn't access the schema 
 
 #### 🔗 Agent References
 - **Updated all agent files** - Changed schema paths from relative to absolute
-  - `adc-contract-writer.md` - Now references `~/.claude/schema/adc-schema.qmd`
-  - `adc-contract-refiner.md` - Now references `~/.claude/schema/adc-schema.qmd`
-  - `adc-code-generator.md` - Now references `~/.claude/schema/adc-schema.qmd`
-  - `adc-code-generator-v2.md` - Now references `~/.claude/schema/adc-schema.qmd`
-  - `adc-compliance-auditor.md` - Now references `~/.claude/schema/adc-schema.qmd`
-  - `adc-workflow-orchestrator.md` - Now references `~/.claude/schema/adc-schema.qmd`
+  - `adc-contract-writer.md` - Now references `~/.claude/schema/adc-schema.md`
+  - `adc-contract-refiner.md` - Now references `~/.claude/schema/adc-schema.md`
+  - `adc-code-generator.md` - Now references `~/.claude/schema/adc-schema.md`
+  - `adc-code-generator-v2.md` - Now references `~/.claude/schema/adc-schema.md`
+  - `adc-compliance-auditor.md` - Now references `~/.claude/schema/adc-schema.md`
+  - `adc-workflow-orchestrator.md` - Now references `~/.claude/schema/adc-schema.md`
 - **Updated command file** - `.claude/commands/adc.md` now references correct schema path
 
 #### 📖 Documentation
@@ -212,7 +234,7 @@ This release focuses on making ADC easily distributable and deployable across di
 
 #### 📦 Package Contents
 - 7 role definition files
-- 1 schema file (adc-schema.qmd)
+- 1 schema file (adc-schema.md)
 - 1 Claude Code command
 - 10 Claude Code agents
 - All CLI tools and dependencies

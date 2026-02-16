@@ -106,25 +106,32 @@ def setup_user_environment():
                         dest.write_text(agent_file.read_text())
                         print(f"   ✓ {agent_file.name}")
             
-            # Install schema files
+            # Install schema files (supports both .md and .qmd)
             print()
-            print("📚 Installing ADC schema...")
-            schema_src = adc_package / 'schema' / 'adc-schema.qmd'
-            schema_dest = schema_dir / 'adc-schema.qmd'
-            
-            # Remove existing file/symlink
-            if schema_dest.exists() or schema_dest.is_symlink():
-                schema_dest.unlink()
-            
+            print("Installing ADC schema...")
+            # Try .md first (preferred), fall back to .qmd for legacy
+            schema_src = adc_package / 'schema' / 'adc-schema.md'
+            schema_filename = 'adc-schema.md'
+            if not schema_src.exists():
+                schema_src = adc_package / 'schema' / 'adc-schema.qmd'
+                schema_filename = 'adc-schema.qmd'
+            schema_dest = schema_dir / schema_filename
+
+            # Remove existing file/symlink (both .md and .qmd)
+            for ext in ['.md', '.qmd']:
+                old_dest = schema_dir / f'adc-schema{ext}'
+                if old_dest.exists() or old_dest.is_symlink():
+                    old_dest.unlink()
+
             if use_symlinks and schema_src_path:
                 # Create symlink
-                src = schema_src_path / 'adc-schema.qmd'
+                src = schema_src_path / schema_filename
                 schema_dest.symlink_to(src)
-                print(f"   🔗 adc-schema.qmd (symlinked)")
+                print(f"   {schema_filename} (symlinked)")
             else:
                 # Copy file
                 schema_dest.write_text(schema_src.read_text())
-                print(f"   ✓ adc-schema.qmd")
+                print(f"   {schema_filename}")
         
         print()
         print("✅ Setup complete!")
@@ -188,7 +195,10 @@ def get_package_info():
         if hasattr(resources, 'files'):
             adc_package = resources.files('adc')
             roles_dir = adc_package / 'roles'
-            schema_file = adc_package / 'schema' / 'adc-schema.qmd'
+            # Check for .md first, fall back to .qmd
+            schema_file = adc_package / 'schema' / 'adc-schema.md'
+            if not schema_file.exists():
+                schema_file = adc_package / 'schema' / 'adc-schema.qmd'
             
             print("📦 ADC Package Information")
             print()

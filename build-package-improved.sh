@@ -23,11 +23,13 @@ else
     echo "  ⚠️  roles/ directory not found"
 fi
 
-# Copy schema
-if [ -f "adc-schema.qmd" ]; then
-    cp adc-schema.qmd src/adc/schema/ && echo "  ✅ Copied schema" || echo "  ⚠️  Failed to copy schema"
+# Copy schema (supports both .md and .qmd)
+if [ -f "adc-schema.md" ]; then
+    cp adc-schema.md src/adc/schema/ && echo "  Copied schema" || echo "  Warning: Failed to copy schema"
+elif [ -f "adc-schema.qmd" ]; then
+    cp adc-schema.qmd src/adc/schema/ && echo "  Copied schema (legacy .qmd)" || echo "  Warning: Failed to copy schema"
 else
-    echo "  ⚠️  adc-schema.qmd not found"
+    echo "  Warning: adc-schema.md not found"
 fi
 
 # Copy Claude command
@@ -47,7 +49,7 @@ fi
 echo ""
 echo "📊 Package data summary:"
 echo "  Roles: $(ls src/adc/roles/*.md 2>/dev/null | wc -l | tr -d ' ') files"
-echo "  Schema: $(ls src/adc/schema/*.qmd 2>/dev/null | wc -l | tr -d ' ') files"
+echo "  Schema: $(ls src/adc/schema/*.md src/adc/schema/*.qmd 2>/dev/null | wc -l | tr -d ' ') files"
 echo "  Commands: $(ls src/adc/claude/commands/*.md 2>/dev/null | wc -l | tr -d ' ') files"
 echo "  Agents: $(ls src/adc/claude/agents/*.md 2>/dev/null | wc -l | tr -d ' ') files"
 echo ""
@@ -79,8 +81,8 @@ if [ -f "$WHEEL_FILE" ]; then
     ROLES_COUNT=$(unzip -l "$WHEEL_FILE" | grep -c "adc/roles/.*\.md" || echo "0")
     echo "  Roles: $ROLES_COUNT files"
     
-    # Check for schema
-    SCHEMA_COUNT=$(unzip -l "$WHEEL_FILE" | grep -c "adc/schema/.*\.qmd" || echo "0")
+    # Check for schema (supports both .md and .qmd)
+    SCHEMA_COUNT=$(unzip -l "$WHEEL_FILE" | grep -cE "adc/schema/.*\.(md|qmd)" || echo "0")
     echo "  Schema: $SCHEMA_COUNT files"
     
     # Check for claude files

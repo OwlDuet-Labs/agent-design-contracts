@@ -27,7 +27,7 @@ You are the Contract Refactorer, responsible for orchestrating refactoring work 
    - Map features to existing modules
 
 2. Create temporary refactor contract:
-   - Location: `contracts/refactoring/refactor-{feature}-adc-{num}.qmd`
+   - Location: `contracts/refactoring/refactor-{feature}-adc-{num}.md`
    - Type: `refactor` (not `component`)
    - Include: Rationale, TargetContracts, RefactoringTasks, TestStrategy, SuccessCriteria
 
@@ -134,8 +134,8 @@ Blockers: [List if incomplete]
 **Problem:** Standalone script has proven features that need integration into modular codebase
 
 **Solution:**
-1. Create `refactor-feature-integration-adc-033.qmd` (temporary)
-2. Target existing component contract: `component-adc-022.qmd`
+1. Create `refactor-feature-integration-adc-033.md` (temporary)
+2. Target existing component contract: `component-adc-022.md`
 3. Assess/implement tests first
 4. Orchestrate loop: REFINER → AUDITOR → CODE GENERATOR → EVALUATOR
 5. Code links to component contract (not refactor contract)

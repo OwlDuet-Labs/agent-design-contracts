@@ -23,7 +23,7 @@ This guide covers distributing ADC through GitHub releases (no PyPI needed).
 # Copy data files to package (one time setup)
 mkdir -p src/adc/{roles,schema,claude/commands,claude/agents}
 cp -r roles/*.md src/adc/roles/
-cp adc-schema.qmd src/adc/schema/
+cp adc-schema.md src/adc/schema/
 cp .claude/commands/adc.md src/adc/claude/commands/
 cp .claude/agents/adc-*.md src/adc/claude/agents/
 ```
@@ -368,7 +368,7 @@ ls -R src/adc/
 
 # If missing, copy them:
 cp -r roles/*.md src/adc/roles/
-cp adc-schema.qmd src/adc/schema/
+cp adc-schema.md src/adc/schema/
 cp .claude/commands/adc.md src/adc/claude/commands/
 cp .claude/agents/adc-*.md src/adc/claude/agents/
 ```

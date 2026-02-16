@@ -180,7 +180,10 @@ def test_vs_code_setup():
                     "settings should contain file associations"
                 )
                 assert settings["files.associations"]["*.qmd"] == "markdown", (
-                    "qmd files should be associated with markdown"
+                    "qmd files should be associated with markdown (backward compat)"
+                )
+                assert settings["files.associations"]["*.md"] == "markdown", (
+                    "md files should be associated with markdown"
                 )
 
             # Check tasks content
