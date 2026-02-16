@@ -7,8 +7,6 @@ Migrates ADC contract files from .qmd to .md extension while:
 - Updating internal references
 - Supporting dry-run mode
 - Generating migration reports
-
-ADC-IMPLEMENTS: <refactor-qmd-md-utility-01>
 """
 
 import argparse
