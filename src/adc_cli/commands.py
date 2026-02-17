@@ -351,8 +351,9 @@ def setup_vscode_command(verbose: bool = False):
             logger.warning(f"Could not read existing VS Code settings: {e}")
 
     # Add ADC-specific settings
+    # Note: *.md association is redundant (VS Code handles natively) but *.qmd needs it
     adc_settings = {
-        "files.associations": {"*.qmd": "markdown", "*.md": "markdown"},
+        "files.associations": {"*.qmd": "markdown"},
         "markdown.extension.list.indentationSize": "compact",
         "markdown.extension.toc.levels": "2..6",
     }

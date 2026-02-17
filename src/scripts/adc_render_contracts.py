@@ -37,16 +37,34 @@ class ContractTreeRenderer:
             return False
     
     def find_contract_files(self, source_dir):
-        """Find all .md and .qmd contract files in directory tree.
-        Prefers .md files when both exist for the same base name."""
-        md_files = set(Path(source_dir).rglob('*.md'))
-        qmd_files = set(Path(source_dir).rglob('*.qmd'))
+        """Find ADC contract files in directory tree.
+
+        Scopes to contracts/ subdirectory per ADC project structure.
+        Excludes README.md and other non-contract files.
+        Prefers .md files when both exist for the same base name.
+        """
+        source = Path(source_dir)
+
+        # Contracts live in contracts/ subdirectory per ADC project structure
+        contracts_dir = source / 'contracts'
+        if contracts_dir.exists():
+            search_dirs = [contracts_dir]
+        else:
+            search_dirs = [source]  # fallback for flat layouts
+
+        md_files = set()
+        qmd_files = set()
+        for d in search_dirs:
+            md_files.update(d.rglob('*.md'))
+            qmd_files.update(d.rglob('*.qmd'))
+
+        # Exclude READMEs and non-contract files
+        md_files = {f for f in md_files if f.name != 'README.md'}
 
         # Filter out .qmd files that have .md equivalents
         qmd_only = {f for f in qmd_files if f.with_suffix('.md') not in md_files}
 
-        all_files = list(md_files | qmd_only)
-        return sorted(all_files)
+        return sorted(md_files | qmd_only)
     
     def render_file(self, qmd_file, output_pdf):
         """Render a single .qmd file to PDF"""

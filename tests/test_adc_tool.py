@@ -182,9 +182,7 @@ def test_vs_code_setup():
                 assert settings["files.associations"]["*.qmd"] == "markdown", (
                     "qmd files should be associated with markdown (backward compat)"
                 )
-                assert settings["files.associations"]["*.md"] == "markdown", (
-                    "md files should be associated with markdown"
-                )
+                # Note: *.md association is omitted - VS Code handles it natively
 
             # Check tasks content
             with open(tasks_file) as f:

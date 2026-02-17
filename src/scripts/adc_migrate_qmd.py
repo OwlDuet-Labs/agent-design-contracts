@@ -94,8 +94,12 @@ def update_references(
     except Exception:
         return 0
 
-    # Pattern to find .qmd references (but not in comments about migration)
+    # Pattern to find .qmd references
     # Matches: filename.qmd, "path/to/file.qmd", *.qmd patterns
+    # NOTE: This is a one-shot migration utility. The regex may also match
+    # .qmd references in prose text (changelogs, migration notes). This is
+    # acceptable for initial migration but re-running on already-migrated
+    # repos could produce garbled output in documentation text.
     pattern = r'(\b\w[\w\-/]*\.qmd\b)'
 
     matches = re.findall(pattern, content)

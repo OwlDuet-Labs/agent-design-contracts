@@ -248,7 +248,8 @@ def determine_mermaid_size(mermaid_lines: list) -> tuple:
     node_count = content.count('[')
 
     # Check diagram direction/type
-    is_horizontal = any(x in content for x in ['flowchart lr', 'graph lr', 'sequencediagram', 'sequence'])
+    # Note: use 'sequencediagram' not 'sequence' to avoid false positives on node labels
+    is_horizontal = any(x in content for x in ['flowchart lr', 'graph lr', 'sequencediagram'])
     is_vertical = any(x in content for x in ['flowchart td', 'graph td', 'flowchart tb', 'graph tb'])
     has_subgraphs = 'subgraph' in content
 
