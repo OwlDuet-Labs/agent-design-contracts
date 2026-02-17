@@ -54,7 +54,7 @@ adc-setup
 This will:
 - ✅ Install `/adc` command for Claude Code
 - ✅ Install ADC agents (`@adc-*`) for Claude Code
-- ✅ Install ADC schema (`adc-schema.qmd`) for agent reference
+- ✅ Install ADC schema (`adc-schema.md`) for agent reference
 - ✅ Set up necessary directories
 
 ## 🔑 Configure API Keys
@@ -186,7 +186,7 @@ pipx uninstall agentic-design-contracts
 # Optionally remove Claude Code files
 rm -rf ~/.claude/commands/adc.md
 rm -rf ~/.claude/agents/adc-*.md
-rm -rf ~/.claude/schema/adc-schema.qmd
+rm -rf ~/.claude/schema/adc-schema.md
 ```
 
 ## 🆘 Troubleshooting

@@ -11,8 +11,8 @@ lint:
   auto_fix: true
   backup_originals: true
   check_patterns:
-    - "**/*adc*.qmd"
-    - "**/contracts/**/*.qmd"
+    - "**/*adc*.md"
+    - "**/contracts/**/*.md"
   exclude_patterns:
     - "**/node_modules/**"
     - "**/trash/**"
@@ -158,52 +158,110 @@ def fix_section_headers(content: str) -> str:
 def fix_mermaid_nodes(content: str) -> str:
     """
     Fix common Mermaid node label issues and add Quarto best practices
+
+    Mermaid sizing guidelines:
+    - Wide/horizontal diagrams (flowchart LR, sequence): fig-width: 6, fig-height: 4
+    - Tall/vertical diagrams (flowchart TD, many nodes): fig-width: 6, fig-height: 8
+    - Default: fig-width: 6, fig-height: 6
     """
     lines = content.split('\n')
     fixed_lines = []
     in_mermaid = False
-    
+    mermaid_content = []
+
     for line in lines:
         if '```{mermaid}' in line or '```mermaid' in line:
             in_mermaid = True
+            mermaid_content = []
+            continue
+        elif line.strip() == '```' and in_mermaid:
+            in_mermaid = False
+            # Determine optimal sizing based on diagram content
+            fig_width, fig_height = determine_mermaid_size(mermaid_content)
+
+            # Build size directives (only include non-None values)
+            size_directives = []
+            if fig_width is not None:
+                size_directives.append(f'%%| fig-width: {fig_width}')
+            if fig_height is not None:
+                size_directives.append(f'%%| fig-height: {fig_height}')
+
             # Add Quarto formatting with proper scaling and centering
             fixed_lines.extend([
                 '::: {.column-page}',
                 '',
                 '```{mermaid}',
-                '%%| fig-width: 12',
-                '%%| fig-height: 10', 
+            ])
+            fixed_lines.extend(size_directives)
+            fixed_lines.extend([
                 '%%| fig-align: center',
                 ''
             ])
-            continue
-        elif line.strip() == '```' and in_mermaid:
-            in_mermaid = False
+            # Process collected mermaid content
+            for mermaid_line in mermaid_content:
+                # Fix node definitions
+                # Remove problematic parentheses from labels
+                mermaid_line = re.sub(r'\[([^[\]]*)\(([^)]*)\)([^[\]]*)\]',
+                             r'[\1\2\3]', mermaid_line)
+
+                # Ensure all node labels are quoted
+                mermaid_line = re.sub(r'\[([^"[\]]+)\]', r'["\1"]', mermaid_line)
+
+                # Fix ampersands
+                mermaid_line = mermaid_line.replace(' & ', ' and ')
+
+                # Fix edge labels - use proper syntax
+                mermaid_line = re.sub(r'--\s*([^-]+)\s*-->', r'-->|"\1"|', mermaid_line)
+
+                fixed_lines.append(mermaid_line)
+
+            mermaid_content = []
             fixed_lines.extend([
-                line,
+                '```',
                 '',
                 ':::'
             ])
             continue
-        
-        if in_mermaid and not line.strip().startswith('#|'):
-            # Fix node definitions
-            # Remove problematic parentheses from labels
-            line = re.sub(r'\[([^[\]]*)\(([^)]*)\)([^[\]]*)\]', 
-                         r'[\1\2\3]', line)
-            
-            # Ensure all node labels are quoted
-            line = re.sub(r'\[([^"[\]]+)\]', r'["\1"]', line)
-            
-            # Fix ampersands
-            line = line.replace(' & ', ' and ')
-            
-            # Fix edge labels - use proper syntax
-            line = re.sub(r'--\s*([^-]+)\s*-->', r'-->|"\1"|', line)
-            
-        fixed_lines.append(line)
-    
+
+        if in_mermaid:
+            mermaid_content.append(line)
+        else:
+            fixed_lines.append(line)
+
     return '\n'.join(fixed_lines)
+
+
+def determine_mermaid_size(mermaid_lines: list) -> tuple:
+    """
+    Determine optimal fig-width and fig-height based on diagram content.
+
+    Sizing guidelines (only one dimension specified):
+    - Tall/vertical diagrams: fig-height: 8
+    - Wide/horizontal diagrams: fig-width: 6
+
+    Returns:
+        tuple: (fig_width, fig_height) - None means use Quarto default
+    """
+    content = '\n'.join(mermaid_lines).lower()
+
+    # Count nodes (approximate by counting '[' which indicates node definitions)
+    node_count = content.count('[')
+
+    # Check diagram direction/type
+    # Note: use 'sequencediagram' not 'sequence' to avoid false positives on node labels
+    is_horizontal = any(x in content for x in ['flowchart lr', 'graph lr', 'sequencediagram'])
+    is_vertical = any(x in content for x in ['flowchart td', 'graph td', 'flowchart tb', 'graph tb'])
+    has_subgraphs = 'subgraph' in content
+
+    if is_horizontal or (not is_vertical and node_count <= 4):
+        # Wide/horizontal diagrams: constrain width, let height auto
+        return (6, None)
+    elif is_vertical or has_subgraphs or node_count > 4:
+        # Tall/vertical diagrams: constrain height, let width auto
+        return (None, 8)
+    else:
+        # Default: constrain width for margin safety
+        return (6, None)
 ```
 
 #### Fix 2.2: Apply Professional Color Scheme
@@ -665,7 +723,7 @@ def run_contract_lint(base_dir: str = None) -> dict:
         config = {
             'auto_fix': True,
             'backup_originals': True,
-            'check_patterns': ["**/*adc*.qmd", "**/contracts/**/*.qmd"],
+            'check_patterns': ["**/*adc*.md", "**/contracts/**/*.md"],
             'exclude_patterns': ["**/node_modules/**", "**/trash/**"]
         }
     
@@ -780,9 +838,9 @@ adc lint /path/to/contracts # Lint specific directory
 
 ### Test Files
 Create test cases in `tests/contract_lint/`:
-- `test_list_formatting.qmd` - Various list formatting issues
-- `test_mermaid_syntax.qmd` - Mermaid diagram problems
-- `test_section_headers.qmd` - Header format issues
+- `test_list_formatting.md` - Various list formatting issues
+- `test_mermaid_syntax.md` - Mermaid diagram problems
+- `test_section_headers.md` - Header format issues
 
 ### Validation
 ```python
@@ -829,8 +887,8 @@ lint:
   auto_fix: true
   backup_originals: true
   check_patterns:
-    - "**/*adc*.qmd"
-    - "**/contracts/**/*.qmd"
+    - "**/*adc*.md"
+    - "**/contracts/**/*.md"
     - "**/*contract*.md"
   exclude_patterns:
     - "**/node_modules/**"

@@ -29,7 +29,7 @@ The `adc` command-line tool provides a unified interface for managing Agent Desi
 - **Command Structure:** `adc <command> [options]`
 - **Configuration:** Manages settings via `~/.adcconfig.json`
 - **AI Provider Integration:** Supports multiple AI providers (OpenAI, Anthropic, Gemini) with dynamic loading
-- **Context Management:** Loads and processes ADC contract files (`.qmd`), source code, and role-based prompts
+- **Context Management:** Loads and processes ADC contract files (`.md`), source code, and role-based prompts
 
 **Core Operations:**
 

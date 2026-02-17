@@ -69,14 +69,14 @@ The codebase MUST remain functionally identical after initialization:
    - Establish overview-to-component hierarchy
 
 4. **Create overview contract**
-   - File: `contracts/adc-001-overview.qmd`
+   - File: `contracts/adc-001-overview.md`
 
 ### Phase 2: Component Contract Loop
 
 For each identified component:
 
 1. **Invoke `@adc-contract-writer`**
-   - Create component contract: `contracts/adc-{num}-{component}.qmd`
+   - Create component contract: `contracts/adc-{num}-{component}.md`
    - Document existing classes, functions, and data models
    - Include accurate Parity sections
 

@@ -74,7 +74,7 @@ pytest tests/test_providers.py -v
 ### Contract Files
 
 - **`contracts/`** - Example ADC contracts demonstrating schema usage
-- **`adc-schema.qmd`** - Complete ADC schema specification defining block types and format
+- **`adc-schema.md`** - Complete ADC schema specification defining block types and format
 
 ### ADC Contract Schema
 
@@ -116,6 +116,6 @@ The system supports multiple AI providers configured via environment variables. 
 
 ### Contract File Conventions
 - Contracts should be stored in a `contracts/` directory
-- Use `.qmd` or `.md` extensions for contract files
+- Use `.md` extension for contract files (Quarto can render `.md` files)
 - Include YAML front matter with metadata
 - Use stable, unique IDs for all design blocks

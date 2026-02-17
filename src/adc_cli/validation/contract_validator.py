@@ -48,12 +48,16 @@ class ContractValidator:
         
         contract_details = []
         
-        # Find all contract files
+        # Find all contract files (support both .md and .qmd, preferring .md)
+        md_files = list(self.contracts_dir.glob("*.md"))
         qmd_files = list(self.contracts_dir.glob("*.qmd"))
-        validation_summary["total_contracts"] = len(qmd_files)
+        # Filter out .qmd files that have .md equivalents
+        qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
+        contract_files = md_files + qmd_only
+        validation_summary["total_contracts"] = len(contract_files)
         
-        for qmd_file in qmd_files:
-            contract_result = self.validate_contract_file(qmd_file)
+        for contract_file in contract_files:
+            contract_result = self.validate_contract_file(contract_file)
             contract_details.append(contract_result)
             
             # Update summary counts
@@ -202,16 +206,20 @@ class ContractValidator:
         """Validate a specific contract by ID."""
         import uuid
         
-        # Find contract file by ID
+        # Find contract file by ID (support both .md and .qmd, preferring .md)
+        md_files = list(self.contracts_dir.glob("*.md"))
         qmd_files = list(self.contracts_dir.glob("*.qmd"))
+        # Filter out .qmd files that have .md equivalents
+        qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
+        all_contract_files = md_files + qmd_only
         contract_file = None
-        
-        for qmd_file in qmd_files:
+
+        for candidate_file in all_contract_files:
             try:
-                with open(qmd_file, "r", encoding="utf-8") as f:
+                with open(candidate_file, "r", encoding="utf-8") as f:
                     content = f.read()
                     if f'contract_id: "{contract_id}"' in content:
-                        contract_file = qmd_file
+                        contract_file = candidate_file
                         break
             except Exception:
                 continue

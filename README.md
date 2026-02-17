@@ -84,7 +84,7 @@ as @refiner.md and @code_generator.md fix the contracts and code based on the au
 ```
 agent-design-contracts/
 ├── .claude/commands/adc.md  # Claude Code command
-├── adc-schema.qmd           # Contract schema definition
+├── adc-schema.md            # Contract schema definition
 ├── roles/                   # AI agent role definitions
 │   ├── code_generator.md    # Generates code from contracts
 │   ├── auditor.md          # Audits code compliance
@@ -175,7 +175,7 @@ Represents processed data ready for storage.
 - **`[Feature]`** - User-facing capabilities
 - **`[TestScenario]`** - Test cases and edge cases
 
-For complete schema documentation, see [adc-schema.qmd](adc-schema.qmd).
+For complete schema documentation, see [adc-schema.md](adc-schema.md).
 
 ## 🤖 AI Agents
 
@@ -226,7 +226,7 @@ pip install -e ".[all]"
 
 - [Setup Guide](docs/SETUP_GUIDE.md) - **Complete guide for using ADC in your projects**
 - [CLI Tool Guide](docs/README-adc-cli.md) - Detailed command usage
-- [Contract Schema](adc-schema.qmd) - Complete schema reference
+- [Contract Schema](adc-schema.md) - Complete schema reference
 - [Contract Linting](docs/CONTRACT_LINTING.md) - Contract validation rules
 - [Examples](contracts/) - Sample ADC contracts
 

@@ -37,4 +37,4 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-adc = ["roles/*.md", "schema/*.qmd", "claude/commands/*.md", "claude/agents/*.md", "templates/*"]
+adc = ["roles/*.md", "schema/*.md", "schema/*.qmd", "claude/commands/*.md", "claude/agents/*.md", "templates/*"]

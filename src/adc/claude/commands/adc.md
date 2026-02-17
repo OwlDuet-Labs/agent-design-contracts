@@ -78,7 +78,7 @@ Implement a phase and continue to the next phase until the AUDITOR confirms that
 
 **Critical Requirements:**
 - Read role files fresh each iteration
-- Follow ADC schema exactly (defined in `~/.claude/schema/adc-schema.qmd`)
+- Follow ADC schema exactly (defined in `~/.claude/schema/adc-schema.md`)
 - Use exact prompts from role files
 - Add ADC-IMPLEMENTS: <ID> markers before classes/functions
 - Respect contract Parity sections for file locations
@@ -88,7 +88,7 @@ Implement a phase and continue to the next phase until the AUDITOR confirms that
 
 **Test Mode Example Workflow:**
 1. **Input:** "adc-test: Create a simple task tracker in Python"
-2. **Refiner:** Creates task-tracker-adc-001.qmd contract
+2. **Refiner:** Creates task-tracker-adc-001.md contract
 3. **Auditor:** Validates implementation against contract
 4. **Code Generator:** Implements complete Python package in `build/task_tracker/`
 5. **Evaluator:** Runs real tests through CLI, measures performance metrics

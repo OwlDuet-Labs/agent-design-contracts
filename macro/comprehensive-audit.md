@@ -228,7 +228,7 @@ soundengine/
 ```
 Proposed Structure:
 contracts-registry/
-  adc-schema.qmd          # Central schema definition
+  adc-schema.md          # Central schema definition
   categories/
     application/          # App & Services contracts
     sound-engine/         # Audio processing contracts
@@ -268,10 +268,10 @@ Key Functionality to Extract:
 ```yaml
 # Base contracts for common patterns
 base-contracts/
-  audio-processor-base.qmd    # Common to all audio plugins
-  ml-training-base.qmd        # Common to all ML components
-  cli-application-base.qmd    # Common to all CLI tools
-  transport-base.qmd          # Common to all IPC/network
+  audio-processor-base.md    # Common to all audio plugins
+  ml-training-base.md        # Common to all ML components
+  cli-application-base.md    # Common to all CLI tools
+  transport-base.md          # Common to all IPC/network
 ```
 
 ### 5. Create Meta-ADC Tools

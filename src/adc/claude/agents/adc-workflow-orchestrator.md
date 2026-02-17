@@ -384,7 +384,7 @@ adc get-role pr_orchestrator
 
 ### **2. Follow ADC Schema**
 
-- Defined in `~/.claude/schema/adc-schema.qmd`
+- Defined in `~/.claude/schema/adc-schema.md`
 - Use exact block types and structure
 - Maintain proper contract IDs
 

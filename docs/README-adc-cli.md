@@ -25,7 +25,7 @@ adc generate --contracts path/to/contracts [--agent anthropic|openai|gemini] [--
 ```
 
 Options:
-- `--contracts`: Path to the directory containing ADC contract files (*.qmd)
+- `--contracts`: Path to the directory containing ADC contract files (*.md)
 - `--prompts`: (Optional) Path to a directory with custom prompt templates
 - `--agent`: (Optional) AI provider to use (anthropic, openai, gemini)
 - `--model`: (Optional) Specific model to use (e.g., "claude-3-sonnet-20240229")
@@ -37,7 +37,7 @@ adc audit --contracts path/to/contracts --code path/to/source [--agent anthropic
 ```
 
 Options:
-- `--contracts`: Path to the directory containing ADC contract files (*.qmd)
+- `--contracts`: Path to the directory containing ADC contract files (*.md)
 - `--code`: Path to the source code directory to audit
 - `--prompts`: (Optional) Path to a directory with custom prompt templates
 - `--agent`: (Optional) AI provider to use
@@ -50,7 +50,7 @@ adc refine --contracts path/to/contracts [--agent anthropic|openai|gemini]
 ```
 
 Options:
-- `--contracts`: Path to the directory containing ADC contract files (*.qmd)
+- `--contracts`: Path to the directory containing ADC contract files (*.md)
 - `--prompts`: (Optional) Path to a directory with custom prompt templates
 - `--agent`: (Optional) AI provider to use
 - `--model`: (Optional) Specific model to use

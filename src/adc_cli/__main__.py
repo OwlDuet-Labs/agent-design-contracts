@@ -36,7 +36,7 @@ Examples:
   adc generate --agent openai     # Use specific AI agent
   adc audit                       # Audit implementation
   adc audit --src-dir ./src       # Audit specific source directory
-  adc refine contract.qmd         # Refine a contract
+  adc refine contract.md          # Refine a contract
   adc config show                 # Show current configuration
   adc config set default_agent anthropic  # Set default agent
   adc setup-vscode               # Setup VS Code integration

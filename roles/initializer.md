@@ -65,7 +65,7 @@ The codebase MUST remain functionally identical after initialization:
    - Establish overview-to-component hierarchy
 
 4. **Create overview contract**
-   - File: `contracts/adc-001-overview.qmd`
+   - File: `contracts/adc-001-overview.md`
    - Document architecture decisions
    - Reference all component contracts
    - Establish context for the system
@@ -75,7 +75,7 @@ The codebase MUST remain functionally identical after initialization:
 For each identified component:
 
 1. **Invoke `@adc-contract-writer`**
-   - Create component contract: `contracts/adc-{num}-{component}.qmd`
+   - Create component contract: `contracts/adc-{num}-{component}.md`
    - Document existing classes, functions, and data models
    - Include accurate Parity sections pointing to existing files
 
@@ -176,8 +176,8 @@ Language variants:
    - Subdirectories: `component/adc-001` etc.
 
 3. **Naming convention**
-   - `adc-{num}-{descriptive-name}.qmd`
-   - Example: `adc-003-authentication.qmd`
+   - `adc-{num}-{descriptive-name}.md`
+   - Example: `adc-003-authentication.md`
 
 ## Success Criteria
 
@@ -226,8 +226,8 @@ Initialization is complete when:
 
 ## Contracts Created
 
-1. `contracts/adc-001-overview.qmd` - System overview
-2. `contracts/adc-002-models.qmd` - Data models (12 blocks)
+1. `contracts/adc-001-overview.md` - System overview
+2. `contracts/adc-002-models.md` - Data models (12 blocks)
 3. ...
 
 ## Marker Coverage by File

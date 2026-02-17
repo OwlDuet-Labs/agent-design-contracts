@@ -47,7 +47,7 @@ ln -s ~/adc-framework ./adc
 
 # This provides IDE visibility into:
 # - adc/roles/*.md (for using @role.md patterns)
-# - adc/adc-schema.qmd (for schema reference)
+# - adc/adc-schema.md (for schema reference)
 # - adc/contracts/* (for examples)
 ```
 
@@ -96,11 +96,11 @@ cd ~/your-project
 mkdir -p contracts
 
 # Copy essential files
-cp ~/adc-framework/adc-schema.qmd ./
+cp ~/adc-framework/adc-schema.md ./
 cp -r ~/adc-framework/roles ./
 
 # Create your first contract
-cat > contracts/my-app-adc-001.qmd << 'EOF'
+cat > contracts/my-app-adc-001.md << 'EOF'
 ---
 contract_id: "my-app-adc-001"
 title: "My Application Design"
@@ -123,10 +123,10 @@ EOF
 
 ```
 your-project/
-├── contracts/              # ADC contract files (*.qmd)
-│   ├── core-adc-001.qmd
-│   ├── auth-adc-002.qmd
-│   └── api-adc-003.qmd
+├── contracts/              # ADC contract files (*.md)
+│   ├── core-adc-001.md
+│   ├── auth-adc-002.md
+│   └── api-adc-003.md
 ├── src/                    # Implementation (generated + manual)
 │   ├── __init__.py
 │   ├── models/            # From [DataModel] blocks
@@ -135,7 +135,7 @@ your-project/
 ├── tests/                  # Test files
 │   └── test_*.py
 ├── adc -> ~/adc-framework  # Symlink to ADC (for IDE)
-├── adc-schema.qmd          # Contract schema reference (optional)
+├── adc-schema.md          # Contract schema reference (optional)
 ├── CLAUDE.md               # Project-specific Claude instructions
 └── README.md               # Project documentation
 ```
@@ -189,7 +189,7 @@ adc generate --contracts ./contracts --agent openai
 adc audit --contracts ./contracts --src-dir ./src
 
 # Refine contracts based on insights
-adc refine contracts/core-adc-001.qmd
+adc refine contracts/core-adc-001.md
 
 # Lint contracts for validation
 adc lint contracts/
@@ -268,13 +268,13 @@ jobs:
 
 4. **Contract validation errors**
    - Run `adc lint contracts/` to identify issues
-   - Check contract follows schema in `adc-schema.qmd`
+   - Check contract follows schema in `adc-schema.md`
 
 ## Additional Resources
 
 - [ADC CLI Documentation](README-adc-cli.md)
 - [Contract Linting Guide](CONTRACT_LINTING.md)
-- [ADC Schema Reference](../adc-schema.qmd)
+- [ADC Schema Reference](../adc-schema.md)
 - [Example Contracts](../contracts/)
 - [Contributing Guide](../CONTRIBUTING.md)
 

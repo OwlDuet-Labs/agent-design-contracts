@@ -156,10 +156,10 @@ ADC projects MUST follow this standardized directory structure to ensure consist
 
 ```
 project-root/
-├── contracts/              # Contract specifications only (.qmd files)
-│   ├── ADC_001_SYSTEM_ARCHITECTURE.qmd
-│   ├── ADC_002_DATA_PIPELINE.qmd
-│   └── ADC_003_API_DESIGN.qmd
+├── contracts/              # Contract specifications only (.md files)
+│   ├── ADC_001_SYSTEM_ARCHITECTURE.md
+│   ├── ADC_002_DATA_PIPELINE.md
+│   └── ADC_003_API_DESIGN.md
 │
 ├── adc_files/             # All ADC workflow artifacts
 │   ├── refinement/        # Contract refinement outputs (ephemeral, gitignored)
@@ -196,13 +196,13 @@ project-root/
 
 #### Contracts Directory (`contracts/`)
 - **Purpose**: Single source of truth for all contract specifications
-- **File Format**: `.qmd` (Quarto Markdown)
-- **Naming Convention**: `ADC_{NUMBER}_{NAME}.qmd`
+- **File Format**: `.md` (Markdown, Quarto-compatible)
+- **Naming Convention**: `ADC_{NUMBER}_{NAME}.md`
 - **Version Control**: Always committed to git
 - **Parity Example**:
   ```yaml
   parity:
-    file_path: "contracts/ADC_001_SYSTEM_ARCHITECTURE.qmd"
+    file_path: "contracts/ADC_001_SYSTEM_ARCHITECTURE.md"
   ```
 
 #### Refinement Directory (`adc_files/refinement/`)
@@ -281,8 +281,8 @@ contracts/*.bak
 
 All ADC-related files MUST follow these naming patterns:
 
-- **Contracts**: `ADC_{NUMBER}_{NAME}.qmd`
-  - Example: `ADC_001_SYSTEM_ARCHITECTURE.qmd`
+- **Contracts**: `ADC_{NUMBER}_{NAME}.md`
+  - Example: `ADC_001_SYSTEM_ARCHITECTURE.md`
   
 - **Refinement**: `ADC_{NUMBER}_REFINEMENT_{TYPE}.md`
   - Example: `ADC_001_REFINEMENT_REPORT.md`

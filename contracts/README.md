@@ -5,15 +5,15 @@ This directory contains Agent Design Contract (ADC) specifications.
 ## File Naming Convention
 
 Contracts should follow this naming pattern:
-- `ADC_{NUMBER}_{NAME}.qmd`
-- Example: `ADC_001_SYSTEM_ARCHITECTURE.qmd`
+- `ADC_{NUMBER}_{NAME}.md`
+- Example: `ADC_001_SYSTEM_ARCHITECTURE.md`
 
 ## Structure
 
 Each contract file should:
 1. Start with YAML front matter containing metadata
 2. Include design blocks following the ADC schema
-3. Reference the schema at `~/.claude/schema/adc-schema.qmd`
+3. Reference the schema at `~/.claude/schema/adc-schema.md`
 
 ## Workflow
 
