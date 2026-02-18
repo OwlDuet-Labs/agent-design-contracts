@@ -27,38 +27,36 @@ export ANTHROPIC_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"
 export GOOGLE_API_KEY="your-key"
 
-# Using ADC loops with Claude Code via the /adc claude command
-% cd agent-design-contracts
+## 0. Launch claude and run the following prompts
+% cd my-repo
 % claude
-/adc create contracts in my-repo/contracts for XYZ
-/adc run ADC loops to implement my-report/contracts
 
+## 1a. Start from scratch: make contracts for a new project from a specification
+as @adc-contract-writer create contracts based on my @docs/my-design-spec.md
 
-# Working with specific ADC roles in any agent in your IDE
-## First, insure that your IDE as visibility into the ADC pkg 
-## by adding manually or... e.g.
-ln agent-design-contracts my-repo/adc
+## 1b. Initialize an existing repo: create contracts from software & add markers
+as @adc-initialize initialize this project
 
-## 1. Make contracts
-as @contract_writer.md create contracts in my-repo/contracts to implement XYZ
+## 2. Run the ADC agent loop
+as @adc-workflow-orchestrator implement @contracts/ following a roadmap with phases
 
-## 2. Audit
-as @auditor.md analysis my my-repo/
+## 3. Refactor with the ADC agent loop
+as @adc-refactorer implement specific refactor based a temporary contract
 
-## 3. Write code
-as @code_generator.md implement the recommendations from the Auditor
+## 4. Evaluate and stress test the software (single agent)
+as @adc-system-evaluator run my system and provide insights in ADC-INSIGHTS.md
 
-## 4. Audit again
-as @auditor.md audit my new code
+## 5. Refine contracts (single agent)
+as @adc-contract-refiner modify contracts based on recommendations in @ADC-INSIGHTS.md
 
-## 5a. Software is in compliance - evaluate
-as @system_evaluator.md evaluate my software
+## 6. Write code (single agent)
+as @adc-code-generator implement implement and test this feature: ...
 
-## 6. Refine
-as @refiner.md update my contracts based on evaluator insights
+## 7. Audit again and again...
+as @adc-compliance-auditor audit this new implementations @contract/adc-005-new-feature.md and@contract/adc-001-overview.md
 
-## 5b. Software not in compliance - fix
-as @refiner.md and @code_generator.md fix the contracts and code based on the audit
+## 8. Software not in compliance - so fix
+as @adc-contract-refiner and @adc-code-generator fix the contracts and code based on the audit
 ```
 
 ## 📖 What is ADC?
@@ -87,36 +85,35 @@ agent-design-contracts/
 ├── adc-schema.md            # Contract schema definition
 ├── roles/                   # AI agent role definitions
 │   ├── code_generator.md    # Generates code from contracts
-│   ├── auditor.md          # Audits code compliance
-│   └── refiner.md          # Improves contract quality
-└── contracts/              # Example ADC contracts
-
-### CLI for git integration
-```
-agent-design-contracts/
-├── src/adc_cli/            # CLI tool implementation
-│   ├── providers.py        # AI provider integrations
-│   ├── commands.py         # Command implementations
-│   └── config.py           # Configuration management
+│   ├── auditor.md           # Audits code compliance
+│   └── refiner.md           # Improves contract quality
+├── contracts/               # Example ADC contracts
+└── src/adc_cli/             # CLI tool implementation
+    ├── providers.py         # AI provider integrations
+    ├── commands.py          # Command implementations
+    └── config.py            # Configuration management
 ```
 
 ### The ADC Workflow
 
 ```mermaid
 graph TD
-    A[Contract Writer] --> B[Design Contracts]
-    B --> C[Auditor]
-    C --> D{Audit Pass?}
-    D -->|No| E[Code Generator]
-    E --> F[Implementation]
-    F --> C
-    D -->|Yes| G[System Evaluator]
-    G --> H[Insights]
-    H --> I[Refiner]
-    I --> J[Updated Contracts]
-    J --> K[Final Audit]
-    K --> L[PR Orchestrator]
-    L --> M[Deployment]
+    subgraph Outer["Outer Loop"]
+        O[Orchestrator] --> E[System Evaluator]
+        E --> |Insights| O
+        O --> PR[PR Orchestrator - PR]
+        PR --> Deploy[Deployment]
+    end
+
+    subgraph Inner["Inner Loop - Orchestrator manages"]
+        Ref[Refiner] --> A1[Auditor]
+        A1 --> |Not Compliant| CG[Code Generator]
+        CG --> A2[Auditor]
+        A2 --> |Not Compliant| CG
+        A2 --> |Compliant| Commit[PR Orchestrator - commit]
+    end
+
+    O --> Ref
 ```
 
 1. **Contract Writer** creates initial design contracts
@@ -278,15 +275,14 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 
 ## 📮 Contact
 
-- **Author**: Thomas A Drake (@t4mber)
+- **Authors**: Thomas A Drake (@t4mber) & OwlDuet-Labs Team
 - **GitHub**: [@OwlDuet-Labs](https://github.com/OwlDuet-Labs)
 - **Issues**: [GitHub Issues](https://github.com/OwlDuet-Labs/agent-design-contracts/issues)
 
 ## 🗺️ Roadmap
 
-- [ ] VS Code extension for ADC syntax highlighting
-- [ ] Contract versioning and migration tools
-- [ ] Integration with CI/CD pipelines
+- [ ] Token usage reduction
+- [ ] System-level verification
 
 ---
 
