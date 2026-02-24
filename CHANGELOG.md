@@ -8,18 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-02-25
+
+### 🚀 New Agents & Contract Format Migration
+
+This release introduces two new specialized agents and migrates the contract file format from `.qmd` to `.md` for better compatibility.
+
+### Added
+
+#### 🤖 New Agents
+- **`adc-refactorer`** - Specialized agent for code refactoring with ADC compliance
+- **`adc-initializer`** - Agent for initializing new ADC projects with proper structure
+
+#### 🔄 Contract Format Migration
+- **Migration utility** `src/scripts/adc_migrate_qmd.py` for bulk `.qmd` to `.md` conversion
+  - Dry-run mode to preview changes
+  - Automatic reference updating in files
+  - Migration report generation
+
+#### 🔧 CLI Improvements
+- **Interactive prompts** - CLI now prompts for confirmation (y/n) when initializing existing projects
+- **Better marker generation** - Code generator explicitly called for ADC-IMPLEMENTS markers
+
 ### Changed
+
+#### 📄 Contract File Format
 - **Migrated contract file format** from `.qmd` to `.md` extension
 - All glob patterns now support both `.md` and `.qmd` (preferring `.md`)
 - Agents now detect and offer to convert legacy `.qmd` files
 - Quarto rendering remains fully functional with `.md` files
 - Updated all documentation references from `.qmd` to `.md`
 
-### Added
-- **Migration utility** `src/scripts/adc_migrate_qmd.py` for bulk `.qmd` to `.md` conversion
-  - Dry-run mode to preview changes
-  - Automatic reference updating in files
-  - Migration report generation
+#### 🔍 Auditor Improvements
+- Tweaked auditor to ensure full compliance runs
+- Removed orphaned ADC-IMPLEMENTS markers
 
 ### Technical Details
 - Contract validator updated to support both extensions (preferring `.md`)
@@ -27,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Render script updated to find both `.md` and `.qmd` files
 - All agent role files updated to reference `.md` extensions
 - Schema path references updated throughout
+- Added Check workflow for branch protection (CI)
+
+### Documentation
+- Fixed README formatting
+- Added refactorer role and contracts documentation
 
 ## [0.9.2] - 2025-11-12
 
@@ -339,6 +366,7 @@ This release focuses on making ADC easily distributable and deployable across di
 ## Notes
 
 ### Version History
+- **0.10.x** - Feature release (new agents, .md migration)
 - **0.9.x** - Private beta release
 - **0.8.x** - Alpha development
 - **0.7.x** - Prototype phase
@@ -358,4 +386,6 @@ For issues or questions, please visit:
 
 ---
 
+[0.10.0]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.10.0
+[0.9.2]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.9.2
 [0.9.1]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.9.1
