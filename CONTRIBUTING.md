@@ -207,6 +207,70 @@ def test_provider_initialization_failure():
 
 ## Submitting Changes
 
+### Branch Protection Rules
+
+The `main` branch is protected. **Never commit directly to main.** All changes must go through pull requests with:
+
+- Required status checks passing (CI/Check workflow)
+- Code review approval
+- Signed commits (GPG verification)
+
+### Required Workflow
+
+**Always follow this workflow for any changes:**
+
+```bash
+# 1. Create a feature branch from main
+git checkout main
+git pull origin main
+git checkout -b feat/your-feature-name
+
+# 2. Make your changes and commit
+git add <files>
+git commit -m "feat: description of change"
+
+# 3. Push the branch (never push to main directly)
+git push -u origin feat/your-feature-name
+
+# 4. Create a pull request
+gh pr create --title "feat: description" --body "Description of changes"
+```
+
+### Branch Naming Conventions
+
+- `feat/` - New features (e.g., `feat/migrate-command`)
+- `fix/` - Bug fixes (e.g., `fix/provider-error`)
+- `docs/` - Documentation (e.g., `docs/api-guide`)
+- `refactor/` - Code refactoring
+- `test/` - Test additions/changes
+- `chore/` - Maintenance tasks
+
+### For AI Agents (Claude Code, etc.)
+
+When using AI coding assistants:
+
+1. **Always create a branch first** - Never commit to main
+2. **Use `gh pr create`** - Create PRs via CLI, not direct pushes
+3. **Wait for CI** - Ensure status checks pass before merging
+4. **Include co-author** - Add `Co-Authored-By:` in commits
+
+Example workflow for AI agents:
+```bash
+# Create branch
+git checkout -b feat/new-feature
+
+# Make changes...
+
+# Commit with co-author
+git commit -m "feat: add new feature
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# Push branch and create PR
+git push -u origin feat/new-feature
+gh pr create --title "feat: add new feature" --body "Description..."
+```
+
 ### Pull Request Process
 
 1. **Update your fork**:
