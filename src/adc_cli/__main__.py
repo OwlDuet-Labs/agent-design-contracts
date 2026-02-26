@@ -21,6 +21,7 @@ from .commands import (
 )
 from .command_modules.get_role_command import add_get_role_parser
 from .command_modules.init_command import add_init_parser, init_command
+from .command_modules.migrate_command import add_migrate_parser, migrate_command
 from .logging_config import configure_logging, logger
 
 
@@ -106,6 +107,9 @@ Examples:
     
     # Init command
     add_init_parser(subparsers)
+
+    # Migrate command
+    add_migrate_parser(subparsers)
 
     # Validate command
     validate_parser = subparsers.add_parser(
@@ -228,6 +232,13 @@ Examples:
             success = init_command(
                 path=args.path,
                 force=args.force
+            )
+        elif args.command == "migrate":
+            success = migrate_command(
+                directory=args.directory,
+                dry_run=args.dry_run,
+                no_update_refs=args.no_update_refs,
+                exclude=args.exclude
             )
         else:
             logger.error(f"Unknown command: {args.command}")

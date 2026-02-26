@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-02-26
+
+### Added
+- **`adc migrate` command** - Migrate ADC contracts from `.qmd` to `.md` format directly from CLI
+  - `--dry-run` flag to preview changes
+  - `--no-update-refs` flag to skip reference updates
+  - `--exclude` flag to specify patterns to exclude
+
 ## [0.10.0] - 2026-02-25
 
 ### 🚀 New Agents & Contract Format Migration
@@ -386,6 +394,7 @@ For issues or questions, please visit:
 
 ---
 
+[0.10.1]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.10.1
 [0.10.0]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.10.0
 [0.9.2]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.9.2
 [0.9.1]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.9.1
