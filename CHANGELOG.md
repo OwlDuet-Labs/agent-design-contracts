@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-03-04
+
+### Removed
+- **All Quarto syntax generation from linter** — no longer injects `` ```{mermaid} ``, `%%|` directives, `::: {.column-page}` wrappers, `\newpage`, `\begin{samepage}`, or `::: {.table-responsive}` divs
+- **`.qmd` backward compatibility** — CLI commands (`generate`, `audit`, `validate`) now use `.md`-only file discovery
+- **3 obsolete Quarto-dependent scripts** — `adc_render_contracts.py`, `adc_migrate_qmd.py`, `render-contract-tree.md`
+- **VS Code `.qmd` file association** — no longer needed after full migration
+- **`.qmd` from package manifests** — removed from `MANIFEST.in`, `pyproject.toml` package-data
+
+### Changed
+- **Linter outputs standard Markdown** — mermaid blocks use `` ```mermaid `` syntax; legacy `` ```{mermaid} `` and `%%|` lines are cleaned up on input
+- **`adc migrate` command expanded** — now also strips `\newpage`, `\begin{samepage}`/`\end{samepage}`, and `::: {.table-responsive}` patterns from `.md` files (new `latex_directives_removed` counter in report)
+- **Setup script simplified** — removed `.qmd` fallback logic for schema installation
+
+### Fixed
+- **VS Code setup test** — updated assertions to match new settings (no longer checks for `.qmd` association)
+
 ## [0.10.1] - 2026-02-26
 
 ### Added
@@ -394,6 +411,7 @@ For issues or questions, please visit:
 
 ---
 
+[0.10.2]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.10.2
 [0.10.1]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.10.1
 [0.10.0]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.10.0
 [0.9.2]: https://github.com/OwlDuet-Labs/agent-design-contracts/releases/tag/v0.9.2
