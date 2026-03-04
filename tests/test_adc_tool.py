@@ -176,13 +176,9 @@ def test_vs_code_setup():
             # Check settings content
             with open(settings_file) as f:
                 settings = json.load(f)
-                assert "files.associations" in settings, (
-                    "settings should contain file associations"
+                assert "markdown.extension.list.indentationSize" in settings, (
+                    "settings should contain markdown extension settings"
                 )
-                assert settings["files.associations"]["*.qmd"] == "markdown", (
-                    "qmd files should be associated with markdown (backward compat)"
-                )
-                # Note: *.md association is omitted - VS Code handles it natively
 
             # Check tasks content
             with open(tasks_file) as f:

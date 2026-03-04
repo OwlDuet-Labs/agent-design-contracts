@@ -116,6 +116,6 @@ The system supports multiple AI providers configured via environment variables. 
 
 ### Contract File Conventions
 - Contracts should be stored in a `contracts/` directory
-- Use `.md` extension for contract files (Quarto can render `.md` files)
+- Use `.md` extension for contract files
 - Include YAML front matter with metadata
 - Use stable, unique IDs for all design blocks

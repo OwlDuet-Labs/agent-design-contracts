@@ -58,28 +58,14 @@ Your primary responsibility is to create robust, comprehensive Agent Design Cont
 
 7. **Mermaid Diagram Best Practices**
    When including `[Diagram]` blocks with Mermaid:
-   - Use `\`\`\`{mermaid}` syntax (Quarto format) for PDF rendering
-   - **Sizing (only specify ONE dimension, not both):**
-     - Tall/vertical diagrams (flowchart TD, many nodes): `fig-height: 8`
-     - Wide/horizontal diagrams (flowchart LR, sequence): `fig-width: 6`
+   - Use standard `\`\`\`mermaid` syntax for GitHub/Markdown compatibility
    - Always quote node labels containing special characters: `A["Node (with parens)"]`
    - Replace `&` with `and` in labels to avoid parsing errors
    - Keep diagrams under 20 nodes; split complex diagrams into multiple blocks
-   - Example for tall diagram:
+   - Example:
      ```
-     \`\`\`{mermaid}
-     %%| fig-height: 8
-     %%| fig-align: center
+     \`\`\`mermaid
      flowchart TD
-         A["Start"] --> B["Process"]
-     \`\`\`
-     ```
-   - Example for wide diagram:
-     ```
-     \`\`\`{mermaid}
-     %%| fig-width: 6
-     %%| fig-align: center
-     flowchart LR
          A["Start"] --> B["Process"]
      \`\`\`
      ```

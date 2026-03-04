@@ -48,12 +48,8 @@ class ContractValidator:
         
         contract_details = []
         
-        # Find all contract files (support both .md and .qmd, preferring .md)
-        md_files = list(self.contracts_dir.glob("*.md"))
-        qmd_files = list(self.contracts_dir.glob("*.qmd"))
-        # Filter out .qmd files that have .md equivalents
-        qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
-        contract_files = md_files + qmd_only
+        # Find all contract files
+        contract_files = list(self.contracts_dir.glob("*.md"))
         validation_summary["total_contracts"] = len(contract_files)
         
         for contract_file in contract_files:
@@ -206,12 +202,8 @@ class ContractValidator:
         """Validate a specific contract by ID."""
         import uuid
         
-        # Find contract file by ID (support both .md and .qmd, preferring .md)
-        md_files = list(self.contracts_dir.glob("*.md"))
-        qmd_files = list(self.contracts_dir.glob("*.qmd"))
-        # Filter out .qmd files that have .md equivalents
-        qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
-        all_contract_files = md_files + qmd_only
+        # Find contract file by ID
+        all_contract_files = list(self.contracts_dir.glob("*.md"))
         contract_file = None
 
         for candidate_file in all_contract_files:

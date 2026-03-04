@@ -1,7 +1,7 @@
 # Contract Lint Macro
 
 ## Purpose
-This macro automatically lints and fixes formatting issues in Agent Design Contract (ADC) files to ensure consistent rendering in Quarto and other Markdown processors. It identifies and corrects common formatting problems that can cause lists to render as code blocks or diagrams to fail parsing.
+This macro automatically lints and fixes formatting issues in Agent Design Contract (ADC) files to ensure consistent rendering in Markdown processors. It identifies and corrects common formatting problems that can cause lists to render as code blocks or diagrams to fail parsing.
 
 ## Configuration
 The macro reads configuration from `~/.adcconfig.yaml` to determine which contracts to lint and output settings. Default configuration:
@@ -21,8 +21,8 @@ lint:
 ## Command Implementation
 
 ```bash
-# As @contract_writer.md, search through all ADC contract files and apply formatting fixes
-# to ensure proper Quarto rendering. Create backup files before making changes.
+# As @contract_writer.md, search through all ADC contract files and apply formatting fixes.
+# Create backup files before making changes.
 # Report all fixes applied and any issues that require manual intervention.
 ```
 

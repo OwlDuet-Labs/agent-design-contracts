@@ -1,7 +1,8 @@
 """
 ADC Migrate Command
 
-Migrates ADC contract files from .qmd to .md extension.
+Migrates ADC contract files from .qmd to .md extension,
+and converts Quarto-specific Mermaid syntax to standard Markdown.
 """
 
 import argparse
@@ -18,16 +19,20 @@ class MigrationReport:
     files_renamed: int = 0
     files_skipped: int = 0
     references_updated: int = 0
+    mermaid_blocks_converted: int = 0
+    latex_directives_removed: int = 0
     errors: List[str] = field(default_factory=list)
     renamed_files: List[tuple] = field(default_factory=list)
 
     def summary(self) -> str:
         lines = [
             "=== ADC QMD to MD Migration Report ===",
-            f"Files found:        {self.files_found}",
-            f"Files renamed:      {self.files_renamed}",
-            f"Files skipped:      {self.files_skipped}",
-            f"References updated: {self.references_updated}",
+            f"Files found:              {self.files_found}",
+            f"Files renamed:            {self.files_renamed}",
+            f"Files skipped:            {self.files_skipped}",
+            f"References updated:       {self.references_updated}",
+            f"Mermaid blocks converted: {self.mermaid_blocks_converted}",
+            f"LaTeX directives removed: {self.latex_directives_removed}",
         ]
         if self.errors:
             lines.append(f"Errors: {len(self.errors)}")
@@ -51,6 +56,166 @@ def rename_file(qmd_path: Path, dry_run: bool = False) -> Path:
     if not dry_run:
         qmd_path.rename(new_path)
     return new_path
+
+
+def convert_quarto_mermaid(file_path: Path, dry_run: bool = False) -> int:
+    """Convert Quarto-style ```{mermaid} blocks to standard ```mermaid in .md files.
+
+    Strips Quarto-only directives (%%| lines) and ::: {.column-page} wrappers.
+
+    Returns the number of blocks converted.
+    """
+    if file_path.suffix != ".md":
+        return 0
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except Exception:
+        return 0
+
+    if '```{mermaid}' not in content:
+        return 0
+
+    lines = content.split('\n')
+    new_lines: List[str] = []
+    converted = 0
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+
+        # Remove ::: {.column-page} wrapper before a mermaid block
+        if re.match(r'^:::\s*\{\.column-page\}', line.strip()):
+            # Look ahead: skip blank lines then check for ```{mermaid}
+            j = i + 1
+            while j < len(lines) and lines[j].strip() == '':
+                j += 1
+            if j < len(lines) and '```{mermaid}' in lines[j]:
+                # Skip the ::: line and blanks — we'll handle the mermaid block next
+                i = j
+                continue
+            # Not followed by mermaid, keep the line
+            new_lines.append(line)
+            i += 1
+            continue
+
+        # Convert ```{mermaid} to ```mermaid
+        if '```{mermaid}' in line:
+            new_lines.append(line.replace('```{mermaid}', '```mermaid'))
+            converted += 1
+            i += 1
+
+            # Strip Quarto-only %%| directives at the top of the block
+            while i < len(lines):
+                stripped = lines[i].strip()
+                if stripped.startswith('%%|'):
+                    i += 1  # skip this directive
+                    continue
+                # Skip blank line that followed directives
+                if stripped == '' and i + 1 < len(lines) and lines[i - 1].strip().startswith('%%|'):
+                    i += 1
+                    continue
+                break
+            continue
+
+        # Remove closing ::: that wrapped a mermaid block
+        if line.strip() == ':::':
+            # Check if this closes a column-page div after a mermaid block
+            # Look back for a recent ```mermaid (within ~30 lines)
+            lookback = '\n'.join(new_lines[-30:]) if len(new_lines) >= 30 else '\n'.join(new_lines)
+            if '```mermaid' in lookback:
+                # Only skip if the preceding non-blank line is ``` (end of mermaid)
+                k = len(new_lines) - 1
+                while k >= 0 and new_lines[k].strip() == '':
+                    k -= 1
+                if k >= 0 and new_lines[k].strip() == '```':
+                    # Also remove trailing blank line before :::
+                    while new_lines and new_lines[-1].strip() == '':
+                        new_lines.pop()
+                    i += 1
+                    continue
+            new_lines.append(line)
+            i += 1
+            continue
+
+        new_lines.append(line)
+        i += 1
+
+    if converted > 0 and not dry_run:
+        file_path.write_text('\n'.join(new_lines), encoding="utf-8")
+
+    return converted
+
+
+def strip_quarto_latex(file_path: Path, dry_run: bool = False) -> int:
+    """Strip Quarto/LaTeX directives from .md files.
+
+    Removes:
+    - \\newpage lines
+    - \\begin{samepage} / \\end{samepage} lines
+    - ::: {.table-responsive} opener lines and their matching ::: closers
+
+    Returns the number of directives removed.
+    """
+    if file_path.suffix != ".md":
+        return 0
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except Exception:
+        return 0
+
+    # Quick check — skip files with no relevant patterns
+    if not any(pat in content for pat in [
+        '\\newpage', '\\begin{samepage}', '\\end{samepage}',
+        '::: {.table-responsive}'
+    ]):
+        return 0
+
+    lines = content.split('\n')
+    new_lines: List[str] = []
+    removed = 0
+    # Track how many ::: {.table-responsive} openers are open
+    table_responsive_depth = 0
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # Remove \newpage
+        if stripped == '\\newpage':
+            removed += 1
+            i += 1
+            continue
+
+        # Remove \begin{samepage} and \end{samepage}
+        if stripped in ('\\begin{samepage}', '\\end{samepage}'):
+            removed += 1
+            i += 1
+            continue
+
+        # Remove ::: {.table-responsive} opener
+        if re.match(r'^:::\s*\{\.table-responsive\}', stripped):
+            table_responsive_depth += 1
+            removed += 1
+            i += 1
+            continue
+
+        # Remove matching ::: closer for table-responsive
+        if stripped == ':::' and table_responsive_depth > 0:
+            table_responsive_depth -= 1
+            removed += 1
+            i += 1
+            continue
+
+        new_lines.append(line)
+        i += 1
+
+    if removed > 0 and not dry_run:
+        file_path.write_text('\n'.join(new_lines), encoding="utf-8")
+
+    return removed
 
 
 def update_references(
@@ -125,17 +290,25 @@ def migrate_directory(
         except Exception as e:
             report.errors.append(f"Error renaming {qmd_path}: {e}")
 
-    # Update references in all files
-    if update_refs:
-        all_files = list(directory.rglob("*"))
-        all_files = [
-            f for f in all_files
-            if f.is_file() and not any(excl in str(f) for excl in exclude_patterns)
-        ]
+    # Update references and convert mermaid syntax in all files
+    all_files = list(directory.rglob("*"))
+    all_files = [
+        f for f in all_files
+        if f.is_file() and not any(excl in str(f) for excl in exclude_patterns)
+    ]
 
-        for file_path in all_files:
+    for file_path in all_files:
+        if update_refs:
             refs_updated = update_references(file_path, dry_run=dry_run)
             report.references_updated += refs_updated
+
+        # Convert Quarto mermaid syntax to standard in .md files
+        blocks_converted = convert_quarto_mermaid(file_path, dry_run=dry_run)
+        report.mermaid_blocks_converted += blocks_converted
+
+        # Strip Quarto/LaTeX directives from .md files
+        latex_removed = strip_quarto_latex(file_path, dry_run=dry_run)
+        report.latex_directives_removed += latex_removed
 
     return report
 
