@@ -18,7 +18,7 @@ The framework is built on three core principles:
 
 The ADC framework consists of several key components:
 
-* **ADC Files:** Markdown files (`.qmd` or `.md`) that contain the design contracts.
+* **ADC Files:** Markdown files (`.md`) that contain the design contracts.
 
 * **ADC Conventions:** A set of rules for writing contracts, including:
 
@@ -38,8 +38,7 @@ The ADC framework consists of several key components:
 
 The ADC framework places the design contract at the center of a collaborative, agent-assisted workflow that spans product, research, and development teams. The process is divided into two main loops: an "Inner Loop" for development and an "Outer Loop" for review and publishing.
 
-```{mermaid}
-fig-width: 8.5
+```mermaid
 %%{init: {'themeVariables': { 'fontSize': '18px', 'fontFamily': 'Inter, Arial, sans-serif' }}}%%
 flowchart TD
     %% Outer Loop: Cross-Disciplinary-Collaboration

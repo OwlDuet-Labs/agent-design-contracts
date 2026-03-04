@@ -77,7 +77,7 @@ Defines the structure of the `~/.adcconfig.json` file. Demonstrates functional c
 The `generate` command, which uses the "Code Generator" agent to create source code from contracts.
 
 - **Command:** `adc generate --contracts <path>`
-- **Behavior:** Loads `.qmd` files, uses the `code_generator.md` prompt, and calls the appropriate AI agent. Parses the Markdown response to create a file tree and source code files.
+- **Behavior:** Loads contract files, uses the `code_generator.md` prompt, and calls the appropriate AI agent. Parses the Markdown response to create a file tree and source code files.
 
 **Parity:**
 
@@ -88,7 +88,7 @@ The `generate` command, which uses the "Code Generator" agent to create source c
 The `audit` command, which uses the "Auditor" agent to check code for compliance with contracts and occasionally report context-engineering insights.
 
 - **Command:** `adc audit --contracts <path> --code <path>`
-- **Behavior:** Loads `.qmd` contract files and the source code, uses the `auditor.md` prompt, and calls the AI agent to produce a drift and architectural analysis report.
+- **Behavior:** Loads contract files and the source code, uses the `auditor.md` prompt, and calls the AI agent to produce a drift and architectural analysis report.
 - **Meta-Policy Optimization:** When systemic patterns are detected (e.g., repeated Optional usage, defensive programming), the audit suggests specific policy updates to prevent these anti-patterns in future code generation.
 
 **Example Meta-Policy Output:**
@@ -109,7 +109,7 @@ The `audit` command, which uses the "Auditor" agent to check code for compliance
 The `refine` command, which uses the "Refiner" agent to improve the design contracts.
 
 - **Command:** `adc refine --contracts <path>`
-- **Behavior:** Loads `.qmd` contract files, uses the `refiner.md` prompt, and calls the AI agent to get suggestions for improving the contracts.
+- **Behavior:** Loads contract files, uses the `refiner.md` prompt, and calls the AI agent to get suggestions for improving the contracts.
 
 **Parity:**
 

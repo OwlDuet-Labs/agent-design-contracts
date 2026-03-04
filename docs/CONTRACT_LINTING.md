@@ -106,10 +106,10 @@ results = linter.run_contract_lint('/path/to/contracts')
 
 ### 3. Mermaid Diagram Enhancements
 
--   Adds Quarto-specific formatting for proper rendering
 -   Fixes common syntax issues (parentheses, ampersands)
 -   Applies professional color scheme (black, gold, grey)
--   Ensures proper figure sizing and centering
+-   For `.qmd` files: adds Quarto-specific formatting (figure sizing, centering, column-page wrappers)
+-   For `.md` files: uses standard `` ```mermaid `` syntax for GitHub/VS Code compatibility
 
 **Before:**
 ```markdown
@@ -117,7 +117,13 @@ results = linter.run_contract_lint('/path/to/contracts')
 A[Node (with parens)] --> B[Process & Analyze]
 ```
 
-**After:**
+**After (`.md` files):**
+```markdown
+```mermaid
+A["Node with parens"] --> B["Process and Analyze"]
+```
+
+**After (`.qmd` files):**
 ```markdown
 ::: {.column-page}
 

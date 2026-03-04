@@ -56,7 +56,7 @@ The summarize-tech command reads configuration from `.adcconfig`:
    * Create/update project-list.csv with discovered projects
 
 2. **Contract Analysis:**
-   * Read and parse all contract files (`.qmd`, `.md`)
+   * Read and parse all contract files (`.md`)
    * Determine implementation status (proposed/active/implemented)
    * Identify mock vs real implementations using `#mocked` tags
    * Assess contract coverage and completeness

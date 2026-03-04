@@ -37,8 +37,8 @@ class ContractLinter:
             'auto_fix': True,
             'backup_originals': True,
             'check_patterns': [
-                "**/*adc*.md", "**/*adc*.qmd",
-                "**/contracts/**/*.md", "**/contracts/**/*.qmd"
+                "**/*adc*.md",
+                "**/contracts/**/*.md"
             ],
             'exclude_patterns': ["**/node_modules/**", "**/trash/**", "**/venv/**"],
             'dry_run': False
@@ -205,12 +205,8 @@ class ContractLinter:
     
     def fix_mermaid_nodes(self, content: str) -> str:
         """
-        Fix common Mermaid node label issues and add Quarto best practices
+        Fix common Mermaid node label issues in standard Markdown mermaid blocks.
         ADC-IMPLEMENTS: contract-lint-mermaid-nodes
-
-        Mermaid sizing guidelines (only one dimension specified):
-        - Tall/vertical diagrams: fig-height: 8
-        - Wide/horizontal diagrams: fig-width: 6
         """
         lines = content.split('\n')
         fixed_lines = []
@@ -224,36 +220,15 @@ class ContractLinter:
                 continue
             elif line.strip() == '```' and in_mermaid:
                 in_mermaid = False
-                # Analyze diagram to determine optimal sizing
-                fig_width, fig_height = self._determine_mermaid_size(mermaid_content)
 
-                # Add Quarto formatting with proper scaling and centering
-                # Only include sizing directive that is set (not None)
-                size_directives = []
-                if fig_width is not None:
-                    size_directives.append(f'%%| fig-width: {fig_width}')
-                if fig_height is not None:
-                    size_directives.append(f'%%| fig-height: {fig_height}')
-
-                fixed_lines.extend([
-                    '::: {.column-page}',
-                    '',
-                    '```{mermaid}',
-                ])
-                fixed_lines.extend(size_directives)
-                fixed_lines.extend([
-                    '%%| fig-align: center',
-                    ''
-                ])
-                # Process collected mermaid content
+                fixed_lines.append('```mermaid')
+                # Process collected mermaid content, skipping legacy %%| directives
                 for mermaid_line in mermaid_content:
+                    if mermaid_line.strip().startswith('%%|'):
+                        continue
                     fixed_lines.append(self._fix_mermaid_line(mermaid_line))
                 mermaid_content = []
-                fixed_lines.extend([
-                    '```',
-                    '',
-                    ':::'
-                ])
+                fixed_lines.append('```')
                 continue
 
             if in_mermaid:
@@ -262,38 +237,6 @@ class ContractLinter:
                 fixed_lines.append(line)
 
         return '\n'.join(fixed_lines)
-
-    def _determine_mermaid_size(self, mermaid_lines: list) -> tuple:
-        """
-        Determine optimal fig-width and fig-height based on diagram content.
-
-        Sizing guidelines (only one custom dimension at a time):
-        - Tall/vertical diagrams: fig-height: 8 (use default width)
-        - Wide/horizontal diagrams: fig-width: 6 (use default height)
-
-        Returns:
-            tuple: (fig_width, fig_height) - None means use Quarto default
-        """
-        content = '\n'.join(mermaid_lines).lower()
-
-        # Count nodes (approximate by counting '[' which indicates node definitions)
-        node_count = content.count('[')
-
-        # Check diagram direction/type
-        # Note: use 'sequencediagram' not 'sequence' to avoid false positives on node labels
-        is_horizontal = any(x in content for x in ['flowchart lr', 'graph lr', 'sequencediagram'])
-        is_vertical = any(x in content for x in ['flowchart td', 'graph td', 'flowchart tb', 'graph tb'])
-        has_subgraphs = 'subgraph' in content
-
-        if is_horizontal or (not is_vertical and node_count <= 4):
-            # Wide/horizontal diagrams: constrain width, let height auto
-            return (6, None)
-        elif is_vertical or has_subgraphs or node_count > 4:
-            # Tall/vertical diagrams: constrain height, let width auto
-            return (None, 8)
-        else:
-            # Default: constrain width for margin safety
-            return (6, None)
     
     def _fix_mermaid_line(self, line: str) -> str:
         """Fix individual Mermaid diagram line"""
@@ -326,7 +269,7 @@ class ContractLinter:
         mermaid_start_index = -1
         
         for i, line in enumerate(lines):
-            if '```{mermaid}' in line:
+            if '```mermaid' in line:
                 in_mermaid = True
                 mermaid_start_index = len(fixed_lines)
             elif line.strip() == '```' and in_mermaid:
@@ -343,90 +286,6 @@ class ContractLinter:
                 fixed_lines.extend(styling)
             
             fixed_lines.append(line)
-        
-        return '\n'.join(fixed_lines)
-    
-    def add_page_break_control(self, content: str) -> str:
-        """
-        Add appropriate page break controls for better PDF formatting
-        ADC-IMPLEMENTS: contract-lint-page-breaks
-        """
-        lines = content.split('\n')
-        fixed_lines = []
-        
-        for i, line in enumerate(lines):
-            # Add page break before major sections (## followed by number)
-            if re.match(r'^## \d+\.', line):
-                if i > 0:  # Don't add page break before first section
-                    fixed_lines.extend(['', '\\newpage', ''])
-            
-            # Add keep-together for Mermaid diagrams
-            if '```{mermaid}' in line:
-                fixed_lines.append('\\begin{samepage}')
-                fixed_lines.append(line)
-                continue
-            elif line.strip() == '```' and i > 0:
-                # Check if this closes a Mermaid block
-                check_range = max(0, i-20)
-                recent_lines = '\n'.join(lines[check_range:i])
-                if '```{mermaid}' in recent_lines:
-                    fixed_lines.append(line)
-                    fixed_lines.append('\\end{samepage}')
-                    continue
-            
-            fixed_lines.append(line)
-        
-        return '\n'.join(fixed_lines)
-    
-    def improve_table_formatting(self, content: str) -> str:
-        """
-        Add proper table formatting for better rendering
-        ADC-IMPLEMENTS: contract-lint-tables
-        """
-        lines = content.split('\n')
-        fixed_lines = []
-        in_table = False
-        in_code_block = False
-        
-        for line in lines:
-            if line.strip().startswith('```'):
-                in_code_block = not in_code_block
-                fixed_lines.append(line)
-                continue
-            
-            if in_code_block:
-                fixed_lines.append(line)
-                continue
-            
-            # Detect table headers
-            if '|' in line and not in_table:
-                # Check if it's really a table (has separator line)
-                if len(fixed_lines) > 0 or '---' in line:
-                    # Add table formatting
-                    fixed_lines.extend([
-                        '',
-                        '::: {.table-responsive}',
-                        ''
-                    ])
-                    in_table = True
-            elif in_table and '|' not in line and line.strip() != '':
-                # End of table
-                fixed_lines.extend([
-                    '',
-                    ':::',
-                    ''
-                ])
-                in_table = False
-            
-            fixed_lines.append(line)
-        
-        # Close table if still open at end
-        if in_table:
-            fixed_lines.extend([
-                '',
-                ':::',
-                ''
-            ])
         
         return '\n'.join(fixed_lines)
     
@@ -468,32 +327,20 @@ class ContractLinter:
             content = self.apply_professional_color_scheme(content)
             if content != old_content:
                 results['fixes_applied'].append('mermaid_colors')
-            
-            # 3. Add Quarto page break controls
-            old_content = content
-            content = self.add_page_break_control(content)
-            if content != old_content:
-                results['fixes_applied'].append('page_breaks')
-            
-            # 4. Improve table formatting
-            old_content = content
-            content = self.improve_table_formatting(content)
-            if content != old_content:
-                results['fixes_applied'].append('table_formatting')
-            
-            # 5. Fix section headers
+
+            # 3. Fix section headers
             old_content = content
             content = self.fix_section_headers(content)
             if content != old_content:
                 results['fixes_applied'].append('section_headers')
-            
-            # 6. Fix list indentation
+
+            # 4. Fix list indentation
             old_content = content
             content = self.fix_list_indentation(content)
             if content != old_content:
                 results['fixes_applied'].append('list_indentation')
-            
-            # 7. Fix list spacing
+
+            # 5. Fix list spacing
             old_content = content
             content = self.fix_list_spacing(content)
             if content != old_content:
@@ -540,8 +387,8 @@ class ContractLinter:
             issues.append(f"Very deep nesting detected ({max_indent} levels)")
         
         # Check for complex Mermaid diagrams
-        if content.count('```{mermaid}') > 0:
-            mermaid_blocks = re.findall(r'```{mermaid}(.*?)```', content, re.DOTALL)
+        if content.count('```mermaid') > 0:
+            mermaid_blocks = re.findall(r'```mermaid(.*?)```', content, re.DOTALL)
             for block in mermaid_blocks:
                 node_count = block.count('[')
                 if node_count > 20:

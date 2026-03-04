@@ -106,22 +106,16 @@ def setup_user_environment():
                         dest.write_text(agent_file.read_text())
                         print(f"   ✓ {agent_file.name}")
             
-            # Install schema files (supports both .md and .qmd)
+            # Install schema files
             print()
             print("Installing ADC schema...")
-            # Try .md first (preferred), fall back to .qmd for legacy
             schema_src = adc_package / 'schema' / 'adc-schema.md'
             schema_filename = 'adc-schema.md'
-            if not schema_src.exists():
-                schema_src = adc_package / 'schema' / 'adc-schema.qmd'
-                schema_filename = 'adc-schema.qmd'
             schema_dest = schema_dir / schema_filename
 
-            # Remove existing file/symlink (both .md and .qmd)
-            for ext in ['.md', '.qmd']:
-                old_dest = schema_dir / f'adc-schema{ext}'
-                if old_dest.exists() or old_dest.is_symlink():
-                    old_dest.unlink()
+            # Remove existing file/symlink
+            if schema_dest.exists() or schema_dest.is_symlink():
+                schema_dest.unlink()
 
             if use_symlinks and schema_src_path:
                 # Create symlink
@@ -195,10 +189,7 @@ def get_package_info():
         if hasattr(resources, 'files'):
             adc_package = resources.files('adc')
             roles_dir = adc_package / 'roles'
-            # Check for .md first, fall back to .qmd
             schema_file = adc_package / 'schema' / 'adc-schema.md'
-            if not schema_file.exists():
-                schema_file = adc_package / 'schema' / 'adc-schema.qmd'
             
             print("📦 ADC Package Information")
             print()

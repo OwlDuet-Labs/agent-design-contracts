@@ -196,7 +196,7 @@ project-root/
 
 #### Contracts Directory (`contracts/`)
 - **Purpose**: Single source of truth for all contract specifications
-- **File Format**: `.md` (Markdown, Quarto-compatible)
+- **File Format**: `.md` (Markdown)
 - **Naming Convention**: `ADC_{NUMBER}_{NAME}.md`
 - **Version Control**: Always committed to git
 - **Parity Example**:

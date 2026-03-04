@@ -47,18 +47,13 @@ def generate_command(
         logger.error(f"Error reading code generator role: {e}")
         return False
 
-    # Find all contract files in contracts directory (supports both .md and .qmd)
+    # Find all contract files in contracts directory
     contracts_path = Path(contracts_dir) / "contracts"
     if not contracts_path.exists():
         logger.error(f"Contracts directory not found: {contracts_path}")
         return False
 
-    # Prefer .md files, include .qmd for backward compatibility
-    md_files = list(contracts_path.glob("*.md"))
-    qmd_files = list(contracts_path.glob("*.qmd"))
-    # Filter out .qmd files that have .md equivalents
-    qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
-    contract_files = md_files + qmd_only
+    contract_files = list(contracts_path.glob("*.md"))
 
     if not contract_files:
         logger.warning(f"No contract files found in {contracts_path}")
@@ -155,13 +150,9 @@ def audit_command(
         logger.error(f"Source directory not found: {src_path}")
         return False
 
-    # Read all contract files (supports both .md and .qmd)
+    # Read all contract files
     contracts_content = ""
-    md_files = list(contracts_path.glob("*.md"))
-    qmd_files = list(contracts_path.glob("*.qmd"))
-    # Filter out .qmd files that have .md equivalents
-    qmd_only = [f for f in qmd_files if f.with_suffix('.md') not in md_files]
-    audit_contract_files = md_files + qmd_only
+    audit_contract_files = list(contracts_path.glob("*.md"))
 
     for contract_file in audit_contract_files:
         try:
@@ -351,9 +342,7 @@ def setup_vscode_command(verbose: bool = False):
             logger.warning(f"Could not read existing VS Code settings: {e}")
 
     # Add ADC-specific settings
-    # Note: *.md association is redundant (VS Code handles natively) but *.qmd needs it
     adc_settings = {
-        "files.associations": {"*.qmd": "markdown"},
         "markdown.extension.list.indentationSize": "compact",
         "markdown.extension.toc.levels": "2..6",
     }
@@ -423,7 +412,7 @@ def setup_vscode_command(verbose: bool = False):
     print("You can now:")
     print("  - Use Ctrl+Shift+P -> 'Tasks: Run Task' -> 'ADC: Generate Code'")
     print("  - Use Ctrl+Shift+P -> 'Tasks: Run Task' -> 'ADC: Audit Implementation'")
-    print("  - ADC contract files (.md, .qmd) will be treated as Markdown with syntax highlighting")
+    print("  - ADC contract files (.md) will be treated as Markdown with syntax highlighting")
 
     return True
 
