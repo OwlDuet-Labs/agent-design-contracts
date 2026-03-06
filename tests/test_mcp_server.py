@@ -331,15 +331,16 @@ class TestSetupMCP:
     def test_build_mcp_entry(self):
         from adc_cli.command_modules.setup_mcp_command import _build_mcp_entry
 
-        entry = _build_mcp_entry("adc-mcp")
-        assert entry["command"] == "adc-mcp"
-        assert entry["args"] == []
+        entry = _build_mcp_entry("python3", ["-m", "adc_cli.mcp_server"])
+        assert entry["command"] == "python3"
+        assert entry["args"] == ["-m", "adc_cli.mcp_server"]
 
     def test_build_mcp_entry_full_path(self):
         from adc_cli.command_modules.setup_mcp_command import _build_mcp_entry
 
-        entry = _build_mcp_entry("/usr/local/bin/adc-mcp")
-        assert entry["command"] == "/usr/local/bin/adc-mcp"
+        entry = _build_mcp_entry("/usr/bin/python3", ["-m", "adc_cli.mcp_server"])
+        assert entry["command"] == "/usr/bin/python3"
+        assert entry["args"] == ["-m", "adc_cli.mcp_server"]
 
     def test_write_client_config_new(self, tmp_path):
         from adc_cli.command_modules.setup_mcp_command import _write_client_config

@@ -85,35 +85,37 @@ def _detect_installed_clients() -> List[Dict]:
     return installed
 
 
-def _find_adc_mcp_command() -> str:
-    """Find the adc-mcp command path."""
-    # Check if adc-mcp is on PATH
-    adc_mcp = shutil.which("adc-mcp")
-    if adc_mcp:
-        return adc_mcp
+def _find_adc_mcp_command() -> tuple[str, list[str]]:
+    """Find the adc-mcp command. Returns (python_path, cmd_args)."""
+    # Strategy: Use Python interpreter + module invocation for better compatibility
+    # with sandboxed IDE environments (Windsurf, Cursor, etc.)
+    
+    # Check if adc-mcp is installed via pipx
+    pipx_venv = Path.home() / ".local" / "pipx" / "venvs" / "agentic-design-contracts"
+    if pipx_venv.exists():
+        python_path = pipx_venv / "bin" / "python"
+        if python_path.exists():
+            return (str(python_path), ["-m", "adc_cli.mcp_server"])
+    
+    # Check if we're in a venv with adc_cli installed
+    venv_python = Path(sys.executable)
+    if venv_python.exists():
+        # Verify adc_cli is importable
+        try:
+            import adc_cli.mcp_server
+            return (str(venv_python), ["-m", "adc_cli.mcp_server"])
+        except ImportError:
+            pass
+    
+    # Fallback: system python3 + module
+    return ("python3", ["-m", "adc_cli.mcp_server"])
 
-    # Check in the current venv
-    venv_bin = Path(sys.prefix) / "bin" / "adc-mcp"
-    if venv_bin.exists():
-        return str(venv_bin)
 
-    # Fallback: use python -m
-    return "adc-mcp"
-
-
-def _build_mcp_entry(command: str) -> Dict:
+def _build_mcp_entry(python_path: str, cmd_args: list[str]) -> Dict:
     """Build the MCP server config entry."""
-    # If the command is a full path, use it directly
-    if os.path.sep in command or command.startswith("/"):
-        return {
-            "command": command,
-            "args": [],
-        }
-
-    # Otherwise, assume it's on PATH
     return {
-        "command": command,
-        "args": [],
+        "command": python_path,
+        "args": cmd_args,
     }
 
 
@@ -224,10 +226,10 @@ def _handle_setup_mcp(args) -> bool:
         return False
 
     # Find adc-mcp command
-    command = _find_adc_mcp_command()
-    mcp_entry = _build_mcp_entry(command)
+    python_path, cmd_args = _find_adc_mcp_command()
+    mcp_entry = _build_mcp_entry(python_path, cmd_args)
 
-    print(f"\nConfiguring ADC MCP server (command: {command})")
+    print(f"\nConfiguring ADC MCP server (command: {python_path} {' '.join(cmd_args)})")
     print("=" * 50)
 
     success_count = 0
