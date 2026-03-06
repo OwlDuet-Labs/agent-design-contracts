@@ -18,6 +18,7 @@ pip install -e ".[anthropic]"  # For Claude
 pip install -e ".[openai]"      # For GPT
 pip install -e ".[gemini]"      # For Gemini
 pip install -e ".[all]"         # All providers
+pip install -e ".[mcp]"         # MCP server for IDE integration
 
 # Initialize ADC project structure
 adc init                        # Creates contracts/, adc_files/, claude_tmp/
@@ -27,6 +28,28 @@ export ANTHROPIC_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"
 export GOOGLE_API_KEY="your-key"
 
+# Set up MCP server for your IDE (Windsurf, Cursor, Claude Desktop, etc.)
+adc setup-mcp                   # Auto-detects and configures all installed clients
+```
+
+### Usage with Any MCP-Compatible IDE (Windsurf, Cursor, Claude Desktop, etc.)
+
+```bash
+# The MCP server exposes 14 tools, 9 role-based prompts, and resources.
+# Just ask your AI assistant to use ADC prompts:
+
+"Use adc-workflow to build a user authentication system"
+"Use adc-generate-code to implement the contracts"
+"Use adc-audit-compliance to check my project"
+"Use adc-write-contracts for a payment processing system"
+"Use adc-refine-contracts on contracts/adc-001.md"
+"Use adc-evaluate-system to test the API endpoints"
+"Use adc-initialize to create contracts for this project"
+```
+
+### Usage with Claude Code
+
+```bash
 ## 0. Launch claude and run the following prompts
 % cd my-repo
 % claude
@@ -91,7 +114,12 @@ agent-design-contracts/
 └── src/adc_cli/             # CLI tool implementation
     ├── providers.py         # AI provider integrations
     ├── commands.py          # Command implementations
-    └── config.py            # Configuration management
+    ├── config.py            # Configuration management
+    └── mcp_server/          # MCP server for universal IDE integration
+        ├── server.py        # Server with stdio transport
+        ├── tools.py         # 14 tools (local + AI-powered)
+        ├── resources.py     # Schema, roles, config resources
+        └── prompts.py       # 9 role-based prompt templates
 ```
 
 ### The ADC Workflow
@@ -219,6 +247,30 @@ pip install -e ".[gemini]"
 pip install -e ".[all]"
 ```
 
+### Install MCP Server (Universal IDE Integration)
+
+```bash
+# Install with MCP support
+pip install -e ".[mcp]"
+
+# Auto-configure all detected IDEs
+adc setup-mcp
+
+# Or configure a specific client
+adc setup-mcp --client windsurf
+adc setup-mcp --client cursor
+adc setup-mcp --client claude-desktop
+adc setup-mcp --client continue
+```
+
+After running `adc setup-mcp`, restart your IDE. The ADC MCP server provides:
+
+| Capability | Count | Description |
+|-----------|-------|-------------|
+| **Tools** | 14 | `adc_init`, `adc_lint`, `adc_validate`, `adc_health`, `adc_config_show`, `adc_config_set`, `adc_list_contracts`, `adc_parse_contract`, `adc_find_markers`, `adc_get_role`, `adc_list_roles`, `adc_generate`, `adc_audit`, `adc_refine` |
+| **Prompts** | 9 | `adc-workflow`, `adc-generate-code`, `adc-audit-compliance`, `adc-refine-contracts`, `adc-write-contracts`, `adc-evaluate-system`, `adc-initialize`, `adc-manage-release`, `adc-refactor` |
+| **Resources** | 10+ | `adc://schema`, `adc://config`, `adc://roles/{name}` |
+
 ## 📚 Documentation
 
 - [Setup Guide](docs/SETUP_GUIDE.md) - **Complete guide for using ADC in your projects**
@@ -281,7 +333,8 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 
 ## 🗺️ Roadmap
 
-- [ ] Token usage reduction
+- [x] MCP server for universal IDE integration (Windsurf, Cursor, Claude Desktop, Continue)
+- [x] Token usage reduction (via MCP tools replacing raw file reads)
 - [ ] System-level verification
 
 ---

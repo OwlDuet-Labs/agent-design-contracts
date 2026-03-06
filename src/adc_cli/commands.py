@@ -1,5 +1,6 @@
 # agent-design-contracts/src/adc_cli/commands.py
 import json
+import shutil
 from pathlib import Path
 
 from .config import load_config
@@ -490,6 +491,17 @@ def health_command(detailed: bool = False, json_output: bool = False, verbose: b
     # Run the async health check
     health_report = asyncio.run(run_health_check())
     
+    # Check MCP server status
+    mcp_status = {
+        "installed": shutil.which("adc-mcp") is not None,
+        "command": shutil.which("adc-mcp") or "not found",
+        "configured_clients": [],
+    }
+    from .command_modules.setup_mcp_command import _get_client_configs
+    for client in _get_client_configs():
+        if client["config_path"].exists():
+            mcp_status["configured_clients"].append(client["name"])
+    
     output_data = {
         "status": health_report.overall_status,
         "timestamp": health_report.timestamp,
@@ -499,6 +511,7 @@ def health_command(detailed: bool = False, json_output: bool = False, verbose: b
             name: {"status": comp.get("status", "unknown"), "score": comp.get("score", 0.0)}
             for name, comp in health_report.components.items()
         },
+        "mcp_server": mcp_status,
         "recommendations": health_report.recommendations
     }
     
@@ -516,6 +529,16 @@ def health_command(detailed: bool = False, json_output: bool = False, verbose: b
             status = component.get("status", "unknown")
             score = component.get("score", 0.0)
             print(f"  {name}: {status.upper()} (score: {score:.2f})")
+        
+        print(f"\nMCP Server:")
+        if mcp_status["installed"]:
+            print(f"  Status: INSTALLED ({mcp_status['command']})")
+            if mcp_status["configured_clients"]:
+                print(f"  Configured: {', '.join(mcp_status['configured_clients'])}")
+            else:
+                print(f"  Configured: none (run 'adc setup-mcp' to configure)")
+        else:
+            print(f"  Status: NOT INSTALLED (install with: pip install -e '.[mcp]')")
         
         if health_report.recommendations:
             print("\nRecommendations:")
