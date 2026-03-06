@@ -30,7 +30,9 @@ from .logging_config import configure_logging, logger
 def main():
     """Main entry point for the ADC CLI tool."""
     parser = argparse.ArgumentParser(
-        description="ADC (Agent Design Contracts) CLI Tool",
+        description="ADC (Agent Design Contracts) CLI Tool — v0.11.0\n"
+                    "A contract-based multi-agent software development workflow\n"
+                    "with MCP server for universal IDE integration.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -41,10 +43,19 @@ Examples:
   adc refine contract.md          # Refine a contract
   adc config show                 # Show current configuration
   adc config set default_agent anthropic  # Set default agent
-  adc setup-vscode               # Setup VS Code integration
+  adc validate                    # Validate ADC-IMPLEMENTS markers
+  adc health                      # Check system health
+  adc lint                        # Lint contract files
+  adc setup-mcp                   # Auto-configure MCP server for all IDEs
+  adc setup-mcp --client windsurf # Configure for a specific IDE
+  adc setup-vscode                # Setup VS Code integration
         """,
     )
 
+    parser.add_argument(
+        "--version", "-V", action="version",
+        version="%(prog)s 0.11.0 (MCP server: adc-mcp)"
+    )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )

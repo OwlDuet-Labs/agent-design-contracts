@@ -6,7 +6,7 @@ Exposes ADC capabilities (tools, resources, prompts) to any MCP-compatible
 AI client: Windsurf, Cursor, Claude Desktop, VS Code Continue, etc.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.11.0"
 
 
 def main():
