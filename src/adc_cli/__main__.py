@@ -22,6 +22,7 @@ from .commands import (
 from .command_modules.get_role_command import add_get_role_parser
 from .command_modules.init_command import add_init_parser, init_command
 from .command_modules.migrate_command import add_migrate_parser, migrate_command
+from .command_modules.setup_mcp_command import add_setup_mcp_parser
 from .logging_config import configure_logging, logger
 
 
@@ -29,7 +30,9 @@ from .logging_config import configure_logging, logger
 def main():
     """Main entry point for the ADC CLI tool."""
     parser = argparse.ArgumentParser(
-        description="ADC (Agent Design Contracts) CLI Tool",
+        description="ADC (Agent Design Contracts) CLI Tool — v0.11.0\n"
+                    "A contract-based multi-agent software development workflow\n"
+                    "with MCP server for universal IDE integration.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -40,10 +43,19 @@ Examples:
   adc refine contract.md          # Refine a contract
   adc config show                 # Show current configuration
   adc config set default_agent anthropic  # Set default agent
-  adc setup-vscode               # Setup VS Code integration
+  adc validate                    # Validate ADC-IMPLEMENTS markers
+  adc health                      # Check system health
+  adc lint                        # Lint contract files
+  adc setup-mcp                   # Auto-configure MCP server for all IDEs
+  adc setup-mcp --client windsurf # Configure for a specific IDE
+  adc setup-vscode                # Setup VS Code integration
         """,
     )
 
+    parser.add_argument(
+        "--version", "-V", action="version",
+        version="%(prog)s 0.11.0 (MCP server: adc-mcp)"
+    )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
@@ -110,6 +122,9 @@ Examples:
 
     # Migrate command
     add_migrate_parser(subparsers)
+
+    # Setup MCP server command
+    add_setup_mcp_parser(subparsers)
 
     # Validate command
     validate_parser = subparsers.add_parser(
@@ -240,6 +255,9 @@ Examples:
                 no_update_refs=args.no_update_refs,
                 exclude=args.exclude
             )
+        elif args.command == "setup-mcp":
+            success = args.func(args)
+            return 0 if success else 1
         else:
             logger.error(f"Unknown command: {args.command}")
             parser.print_help()
