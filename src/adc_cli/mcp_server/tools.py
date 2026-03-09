@@ -469,20 +469,19 @@ def _adc_get_role(role_name: str, project_path: str = "") -> Dict[str, Any]:
                 "content": role_file.read_text(encoding="utf-8"),
             }
 
-    # Try package-bundled roles
-    try:
-        from importlib import resources
-        adc_package = resources.files("adc")
-        role_res = adc_package / "roles" / f"{role_name}.md"
-        if role_res.is_file():
-            return {
-                "status": "success",
-                "role_name": role_name,
-                "source": "package",
-                "content": role_res.read_text(encoding="utf-8"),
-            }
-    except Exception:
-        pass
+    # Try package-bundled roles (fallback to direct file system)
+    import adc_cli.mcp_server
+    server_dir = Path(adc_cli.mcp_server.__file__).parent.parent.parent
+    package_roles_dir = server_dir / "adc" / "roles"
+    
+    role_file = package_roles_dir / f"{role_name}.md"
+    if role_file.exists():
+        return {
+            "status": "success",
+            "role_name": role_name,
+            "source": "package",
+            "content": role_file.read_text(encoding="utf-8"),
+        }
 
     return {
         "status": "error",
@@ -506,18 +505,17 @@ def _adc_list_roles(project_path: str = "") -> Dict[str, Any]:
 
     # Package-bundled roles (if not already found)
     found_names = {r["name"] for r in roles}
-    try:
-        from importlib import resources
-        adc_package = resources.files("adc")
-        roles_pkg = adc_package / "roles"
-        for f in roles_pkg.iterdir():
-            if str(f).endswith(".md") and Path(str(f)).stem not in found_names:
+    import adc_cli.mcp_server
+    server_dir = Path(adc_cli.mcp_server.__file__).parent.parent.parent
+    package_roles_dir = server_dir / "adc" / "roles"
+    
+    if package_roles_dir.exists():
+        for f in sorted(package_roles_dir.glob("*.md")):
+            if f.stem not in found_names:
                 roles.append({
-                    "name": Path(str(f)).stem,
+                    "name": f.stem,
                     "source": "package",
                 })
-    except Exception:
-        pass
 
     return {
         "status": "success",
